@@ -1,4 +1,4 @@
-# smithery/cli
+# Smithery CLI ![NPM Version](https://img.shields.io/npm/v/%40smithery%2Fcli)
 
 The Smithery registry installer and manager for Model Context Protocol (MCP) servers, designed to be client-agnostic.
 
