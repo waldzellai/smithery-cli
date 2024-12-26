@@ -2,10 +2,21 @@ import chalk from "chalk"
 import { resolveServer } from "../utils/registry-utils.js"
 import { handleServerAction } from "../utils/server-actions.js"
 import { displayServerDetails } from "../utils/server-display.js"
+import { VALID_CLIENTS, type ValidClient } from "../constants.js"
 
-export async function get(serverId: string) {
+export async function get(serverId: string, client: ValidClient) {
 	try {
-		const server = await resolveServer(serverId)
+		// ensure client is valid
+		if (client && !VALID_CLIENTS.includes(client as ValidClient)) {
+			console.error(
+				chalk.red(
+					`Invalid client: ${client}\nValid clients are: ${VALID_CLIENTS.join(", ")}`,
+				),
+			)
+			process.exit(1)
+		}
+
+		const server = await resolveServer(serverId, client)
 
 		if (!server) {
 			console.log(chalk.yellow(`No server found with ID: ${serverId}`))
@@ -13,7 +24,7 @@ export async function get(serverId: string) {
 		}
 
 		const action = await displayServerDetails(server, false)
-		await handleServerAction(server, action, {})
+		await handleServerAction(server, action, {}, false, client)
 	} catch (error) {
 		console.error(chalk.red("Error loading server:"))
 		if (error instanceof Error && error.message.includes("fetch")) {

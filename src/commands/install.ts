@@ -7,7 +7,7 @@ const serverManager = new ServerManager()
 
 export async function install(
 	serverId: string,
-	client?: string,
+	client: ValidClient,
 ): Promise<void> {
 	// ensure client is valid
 	if (client && !VALID_CLIENTS.includes(client as ValidClient)) {
@@ -28,6 +28,6 @@ export async function install(
 	}
 
 	// install server using the serverManager instance
-	await serverManager.installServer(server)
-	console.log(chalk.green(`✓ Successfully installed package '${serverId}'`))
+	await serverManager.installServer(server, client)
+	console.log(chalk.green(`✓ Successfully installed package '${serverId}' for ${client}`))
 }

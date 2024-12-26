@@ -2,6 +2,7 @@ import chalk from "chalk"
 import type { ResolvedServer } from "../types/registry.js"
 import { ServerManager } from "./server-manager.js"
 import { displayServerDetails, confirmUninstall } from "./server-display.js"
+import { type ValidClient } from "../constants.js"
 
 export type ActionHandler = {
 	onInstall?: (server: ResolvedServer) => Promise<void>
@@ -16,11 +17,12 @@ export async function handleServerAction(
 	action: string,
 	handlers: ActionHandler,
 	showActionsAfter = true,
+	client: ValidClient = "claude"
 ): Promise<void> {
 	switch (action) {
 		case "install":
 			console.log(chalk.cyan(`\nPreparing to install ${server.name}...`))
-			await serverManager.installServer(server)
+			await serverManager.installServer(server, client)
 			server.isInstalled = true
 			if (handlers.onInstall) {
 				await handlers.onInstall(server)
@@ -29,7 +31,7 @@ export async function handleServerAction(
 			return // Exit after successful installation
 		case "uninstall":
 			if (await confirmUninstall(server.name)) {
-				await serverManager.uninstallServer(server.id)
+				await serverManager.uninstallServer(server.id, client)
 				console.log(chalk.green(`Successfully uninstalled ${server.name}`))
 				server.isInstalled = false
 				if (handlers.onUninstall) {
@@ -52,6 +54,6 @@ export async function handleServerAction(
 	// Show actions again after completing an action (except for exit/back)
 	if (showActionsAfter) {
 		const nextAction = await displayServerDetails(server)
-		await handleServerAction(server, nextAction, handlers)
+		await handleServerAction(server, nextAction, handlers, showActionsAfter, client)
 	}
 }

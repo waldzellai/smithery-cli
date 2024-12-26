@@ -10,57 +10,51 @@ export interface ClaudeConfig extends MCPConfig {
 // biome-ignore lint/complexity/noStaticOnlyClass: <explanation>
 export class ConfigManager {
 	private static configPath: string
+	private static clientPaths: Record<string, string>
 
 	static {
-		if (process.platform === "win32") {
-			const appData =
-				process.env.APPDATA || path.join(os.homedir(), "AppData", "Roaming")
-			ConfigManager.configPath = path.join(
-				appData,
-				"Claude",
-				"claude_desktop_config.json",
-			)
-		} else if (process.platform === "darwin") {
-			// macOS
-			const homeDir = os.homedir()
-			ConfigManager.configPath = path.join(
-				homeDir,
-				"Library",
-				"Application Support",
-				"Claude",
-				"claude_desktop_config.json",
-			)
-		} else {
-			// Linux
-			const homeDir = os.homedir()
-			const configDir =
-				process.env.XDG_CONFIG_HOME || path.join(homeDir, ".config")
-			ConfigManager.configPath = path.join(
-				configDir,
-				"Claude",
-				"claude_desktop_config.json",
-			)
+		const homeDir = os.homedir()
+		
+		// Define platform-specific base directories
+		const platformPaths = {
+			win32: {
+				baseDir: process.env.APPDATA || path.join(homeDir, "AppData", "Roaming"),
+				vscodePath: path.join("Code", "User", "globalStorage")
+			},
+			darwin: {
+				baseDir: path.join(homeDir, "Library", "Application Support"),
+				vscodePath: path.join("Code", "User", "globalStorage")
+			},
+			linux: {
+				baseDir: process.env.XDG_CONFIG_HOME || path.join(homeDir, ".config"),
+				vscodePath: path.join("Code/User/globalStorage")
+			}
 		}
+
+		const platform = process.platform as keyof typeof platformPaths
+		const { baseDir, vscodePath } = platformPaths[platform]
+
+		// Define client paths using the platform-specific base directories
+		const clientPaths = {
+			claude: path.join(baseDir, "Claude", "claude_desktop_config.json"),
+			cline: path.join(baseDir, vscodePath, "saoudrizwan.claude-dev", "settings", "cline_mcp_settings.json")
+		}
+
+		ConfigManager.configPath = clientPaths.claude
+		ConfigManager.clientPaths = clientPaths
 	}
 
 	static getConfigPath(client?: string): string {
-		const baseDir = path.dirname(ConfigManager.configPath)
-		// Default to Claude if no client specified or if explicitly Claude
-		if (!client || client.toLowerCase() === "claude") {
-			return ConfigManager.configPath
-		}
-		// Support for future AI clients
-		// Currently only Claude is officially supported
-		// 'jan' and others are placeholders for future integrations
-		return path.join(
-			baseDir,
+		const normalizedClient = client?.toLowerCase() || "claude"
+		return ConfigManager.clientPaths[normalizedClient] || path.join(
+			path.dirname(ConfigManager.configPath),
 			"..",
-			client,
-			`${client.toLowerCase()}_config.json`,
+			client || "claude",
+			`${normalizedClient}_config.json`
 		)
 	}
 
-	static readConfig(client?: string): MCPConfig {
+	static readConfig(client: string): MCPConfig {
 		try {
 			const configPath = ConfigManager.getConfigPath(client)
 			if (!fs.existsSync(configPath)) {
@@ -90,7 +84,7 @@ export class ConfigManager {
 		fs.writeFileSync(configPath, JSON.stringify(config, null, 2))
 	}
 
-	static isServerInstalled(id: string, client?: string): boolean {
+	static isServerInstalled(id: string, client: string): boolean {
 		const config = ConfigManager.readConfig(client)
 		const normalizedId = ConfigManager.normalizeServerId(id)
 		return normalizedId in config.mcpServers
@@ -99,7 +93,7 @@ export class ConfigManager {
 	static async installServer(
 		id: string,
 		serverConfig: StdioConnection,
-		client?: string,
+		client: string,
 	): Promise<void> {
 		const normalizedId = ConfigManager.normalizeServerId(id)
 		const config = ConfigManager.readConfig(client)
@@ -107,7 +101,7 @@ export class ConfigManager {
 		ConfigManager.writeConfig(config, client)
 	}
 
-	static async uninstallServer(id: string, client?: string): Promise<void> {
+	static async uninstallServer(id: string, client: string): Promise<void> {
 		const normalizedId = ConfigManager.normalizeServerId(id)
 		const config = ConfigManager.readConfig(client)
 		if (!config.mcpServers[normalizedId]) {
@@ -118,7 +112,7 @@ export class ConfigManager {
 		ConfigManager.writeConfig(config, client)
 	}
 
-	static getServerConfig(id: string, client?: string): StdioConnection | null {
+	static getServerConfig(id: string, client: string): StdioConnection | null {
 		const config = ConfigManager.readConfig(client)
 		return config.mcpServers[id] || null
 	}
@@ -151,7 +145,7 @@ export class ConfigManager {
 	}
 
 	// get locally installed servers
-	static getInstalledServerIds(client?: string): string[] {
+	static getInstalledServerIds(client: string): string[] {
 		const config = ConfigManager.readConfig(client)
 		const ids = Object.keys(config.mcpServers || {})
 		return ids
