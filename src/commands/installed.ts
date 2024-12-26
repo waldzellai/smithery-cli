@@ -10,13 +10,24 @@ import {
 	printServerListHeader,
 	createListChoices,
 } from "../utils/server-display.js"
+import { VALID_CLIENTS, type ValidClient } from "../constants.js"
 
 inquirer.registerPrompt("autocomplete", AutocompletePrompt)
 
 let installedServersCache: ResolvedServer[] | null = null
 
-export async function listInstalledServers(): Promise<void> {
-	const installedIds = ConfigManager.getInstalledServerIds()
+export async function listInstalledServers(client: ValidClient): Promise<void> {
+	// ensure client is valid
+	if (client && !VALID_CLIENTS.includes(client as ValidClient)) {
+		console.error(
+			chalk.red(
+				`Invalid client: ${client}\nValid clients are: ${VALID_CLIENTS.join(", ")}`,
+			),
+		)
+		process.exit(1)
+	}
+
+	const installedIds = ConfigManager.getInstalledServerIds(client)
 
 	if (installedIds.length === 0) {
 		console.log(chalk.yellow("\nNo MCP servers are currently installed."))
@@ -33,7 +44,7 @@ export async function listInstalledServers(): Promise<void> {
 			installedServersCache.map((server) => server.id),
 		)
 	) {
-		installedServersCache = await fetchServers(undefined, denormalizedIds)
+		installedServersCache = await fetchServers(client, denormalizedIds)
 		installedServersCache.forEach((server) => {
 			server.isInstalled = true
 		})
@@ -57,9 +68,9 @@ export async function listInstalledServers(): Promise<void> {
 
 	const action = await displayServerDetails(answer.selectedServer)
 	await handleServerAction(answer.selectedServer, action, {
-		onUninstall: () => listInstalledServers(),
-		onBack: listInstalledServers,
-	})
+		onUninstall: () => listInstalledServers(client),
+		onBack: () => listInstalledServers(client),
+	}, true, client)
 }
 
 function areArraysEqual(arr1: string[], arr2: string[]): boolean {

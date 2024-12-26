@@ -13,7 +13,7 @@ export const REGISTRY_ENDPOINT =
 	process.env.REGISTRY_ENDPOINT || "https://registry.smithery.ai"
 
 export async function fetchServers(
-	client?: string,
+	client: string,
 	serverIds: string[] = [],
 ): Promise<ResolvedServer[]> {
 	try {
@@ -40,12 +40,12 @@ export async function fetchServers(
 // Returns null if server cannot be found in either location
 export async function resolveServer(
 	serverId: string,
-	client?: string,
+	client: string,
 ): Promise<ResolvedServer | null> {
 	try {
 		// Check if server is installed first
 		// const config = ConfigManager.readConfig()
-		const isInstalled = ConfigManager.isServerInstalled(serverId)
+		const isInstalled = ConfigManager.isServerInstalled(serverId, client)
 
 		const response = await fetch(`${REGISTRY_ENDPOINT}/servers/${serverId}`)
 

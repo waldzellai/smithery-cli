@@ -6,17 +6,28 @@ import {
 import { ConfigManager } from "../utils/config-manager.js"
 import { createListChoices } from "../utils/server-display.js"
 import inquirer from "inquirer"
+import { VALID_CLIENTS, type ValidClient } from "../constants.js"
 
-export async function inspect(): Promise<void> {
+export async function inspect(client: ValidClient): Promise<void> {
 	try {
-		const installedIds = ConfigManager.getInstalledServerIds()
+		// ensure client is valid
+		if (client && !VALID_CLIENTS.includes(client as ValidClient)) {
+			console.error(
+				chalk.red(
+					`Invalid client: ${client}\nValid clients are: ${VALID_CLIENTS.join(", ")}`,
+				),
+			)
+			process.exit(1)
+		}
+
+		const installedIds = ConfigManager.getInstalledServerIds(client)
 
 		if (installedIds.length === 0) {
 			console.log(chalk.yellow("\nNo MCP servers are currently installed."))
 			return
 		}
 
-		const config = ConfigManager.readConfig()
+		const config = ConfigManager.readConfig(client)
 
 		while (true) {
 			const choices = createListChoices(
