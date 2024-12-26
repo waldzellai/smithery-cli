@@ -37,7 +37,8 @@ export class ConfigManager {
 		// Define client paths using the platform-specific base directories
 		const clientPaths = {
 			claude: path.join(baseDir, "Claude", "claude_desktop_config.json"),
-			cline: path.join(baseDir, vscodePath, "saoudrizwan.claude-dev", "settings", "cline_mcp_settings.json")
+			cline: path.join(baseDir, vscodePath, "saoudrizwan.claude-dev", "settings", "cline_mcp_settings.json"),
+			"roo-cline": path.join(baseDir, vscodePath, "rooveterinaryinc.roo-cline", "settings", "cline_mcp_settings.json")
 		}
 
 		ConfigManager.configPath = clientPaths.claude
