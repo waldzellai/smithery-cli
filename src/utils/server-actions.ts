@@ -2,7 +2,7 @@ import chalk from "chalk"
 import type { ResolvedServer } from "../types/registry.js"
 import { ServerManager } from "./server-manager.js"
 import { displayServerDetails, confirmUninstall } from "./server-display.js"
-import { type ValidClient } from "../constants.js"
+import type { ValidClient } from "../constants.js"
 
 export type ActionHandler = {
 	onInstall?: (server: ResolvedServer) => Promise<void>
@@ -17,7 +17,7 @@ export async function handleServerAction(
 	action: string,
 	handlers: ActionHandler,
 	showActionsAfter = true,
-	client: ValidClient = "claude"
+	client: ValidClient = "claude",
 ): Promise<void> {
 	switch (action) {
 		case "install":
@@ -54,6 +54,12 @@ export async function handleServerAction(
 	// Show actions again after completing an action (except for exit/back)
 	if (showActionsAfter) {
 		const nextAction = await displayServerDetails(server)
-		await handleServerAction(server, nextAction, handlers, showActionsAfter, client)
+		await handleServerAction(
+			server,
+			nextAction,
+			handlers,
+			showActionsAfter,
+			client,
+		)
 	}
 }

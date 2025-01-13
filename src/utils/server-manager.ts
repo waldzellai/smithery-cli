@@ -4,7 +4,7 @@ import type { ConnectionDetails } from "../types/registry.js"
 import { getServerConfiguration } from "./registry-utils.js"
 import { promptForRestart } from "./client-utils.js"
 import { collectConfigValues } from "./runtime-utils.js"
-import { ValidClient } from "../constants.js"
+import type { ValidClient } from "../constants.js"
 
 export class ServerManager {
 	private configManager: typeof ConfigManager
@@ -21,7 +21,10 @@ export class ServerManager {
 		return connection
 	}
 
-	async installServer(server: ResolvedServer, client: ValidClient): Promise<void> {
+	async installServer(
+		server: ResolvedServer,
+		client: ValidClient,
+	): Promise<void> {
 		const connection = this.validateConnection(server)
 		const values = await collectConfigValues(connection)
 		const serverConfig = await getServerConfiguration(
@@ -36,11 +39,7 @@ export class ServerManager {
 			)
 		}
 
-		await this.configManager.installServer(
-			server.id,
-			serverConfig,
-			client,
-		)
+		await this.configManager.installServer(server.id, serverConfig, client)
 		await promptForRestart(client)
 	}
 

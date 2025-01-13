@@ -66,8 +66,8 @@ export async function resolveServer(
 		const registryServer: RegistryServer = await response.json()
 
 		const resolvedServer: ResolvedServer = {
-			id: registryServer.id,
-			name: registryServer.name,
+			id: registryServer.qualifiedName,
+			name: registryServer.displayName,
 			connections: registryServer.connections,
 			isInstalled: isInstalled, // Use the checked installation status
 			client: client,
@@ -103,14 +103,9 @@ export async function getServerConfiguration(
 			body: JSON.stringify(requestBody),
 		})
 
-		const text = await response.text()
-
-		if (!text) {
-			throw new Error("Empty response received from registry")
-		}
-
 		try {
-			const parsed = JSON.parse(text) as RegistryResponse
+			const parsed: RegistryResponse = await response.json()
+
 			return parsed.result
 		} catch (parseError: unknown) {
 			const errorMessage =

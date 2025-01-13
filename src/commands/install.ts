@@ -29,5 +29,7 @@ export async function install(
 
 	// install server using the serverManager instance
 	await serverManager.installServer(server, client)
-	console.log(chalk.green(`✓ Successfully installed package '${serverId}' for ${client}`))
+	console.log(
+		chalk.green(`✓ Successfully installed package '${serverId}' for ${client}`),
+	)
 }

@@ -14,21 +14,22 @@ export class ConfigManager {
 
 	static {
 		const homeDir = os.homedir()
-		
+
 		// Define platform-specific base directories
 		const platformPaths = {
 			win32: {
-				baseDir: process.env.APPDATA || path.join(homeDir, "AppData", "Roaming"),
-				vscodePath: path.join("Code", "User", "globalStorage")
+				baseDir:
+					process.env.APPDATA || path.join(homeDir, "AppData", "Roaming"),
+				vscodePath: path.join("Code", "User", "globalStorage"),
 			},
 			darwin: {
 				baseDir: path.join(homeDir, "Library", "Application Support"),
-				vscodePath: path.join("Code", "User", "globalStorage")
+				vscodePath: path.join("Code", "User", "globalStorage"),
 			},
 			linux: {
 				baseDir: process.env.XDG_CONFIG_HOME || path.join(homeDir, ".config"),
-				vscodePath: path.join("Code/User/globalStorage")
-			}
+				vscodePath: path.join("Code/User/globalStorage"),
+			},
 		}
 
 		const platform = process.platform as keyof typeof platformPaths
@@ -37,8 +38,20 @@ export class ConfigManager {
 		// Define client paths using the platform-specific base directories
 		const clientPaths = {
 			claude: path.join(baseDir, "Claude", "claude_desktop_config.json"),
-			cline: path.join(baseDir, vscodePath, "saoudrizwan.claude-dev", "settings", "cline_mcp_settings.json"),
-			"roo-cline": path.join(baseDir, vscodePath, "rooveterinaryinc.roo-cline", "settings", "cline_mcp_settings.json")
+			cline: path.join(
+				baseDir,
+				vscodePath,
+				"saoudrizwan.claude-dev",
+				"settings",
+				"cline_mcp_settings.json",
+			),
+			"roo-cline": path.join(
+				baseDir,
+				vscodePath,
+				"rooveterinaryinc.roo-cline",
+				"settings",
+				"cline_mcp_settings.json",
+			),
 		}
 
 		ConfigManager.configPath = clientPaths.claude
@@ -47,11 +60,14 @@ export class ConfigManager {
 
 	static getConfigPath(client?: string): string {
 		const normalizedClient = client?.toLowerCase() || "claude"
-		return ConfigManager.clientPaths[normalizedClient] || path.join(
-			path.dirname(ConfigManager.configPath),
-			"..",
-			client || "claude",
-			`${normalizedClient}_config.json`
+		return (
+			ConfigManager.clientPaths[normalizedClient] ||
+			path.join(
+				path.dirname(ConfigManager.configPath),
+				"..",
+				client || "claude",
+				`${normalizedClient}_config.json`,
+			)
 		)
 	}
 

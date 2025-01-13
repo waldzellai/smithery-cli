@@ -5,8 +5,8 @@ import { z } from "zod"
 
 // Base registry package (what we receive)
 export interface RegistryServer {
-	id: string
-	name: string
+	qualifiedName: string
+	displayName: string
 	connections: Array<ConnectionDetails>
 }
 

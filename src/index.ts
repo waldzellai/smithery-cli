@@ -5,13 +5,14 @@ import { uninstall } from "./commands/uninstall.js"
 import { listInstalledServers } from "./commands/installed.js"
 import { get } from "./commands/view.js"
 import { inspect } from "./commands/inspect.js"
-import { type ValidClient } from "./constants.js"
+import type { ValidClient } from "./constants.js"
 import chalk from "chalk"
 
 const command = process.argv[2]
 const packageName = process.argv[3]
 const clientFlag = process.argv.indexOf("--client")
-const client = clientFlag !== -1 ? process.argv[clientFlag + 1] as ValidClient : "claude"
+const client =
+	clientFlag !== -1 ? (process.argv[clientFlag + 1] as ValidClient) : "claude"
 if (clientFlag === -1) {
 	console.log(chalk.yellow("Client not provided, defaulting to claude"))
 }

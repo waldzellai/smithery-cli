@@ -5,7 +5,10 @@ import { VALID_CLIENTS, type ValidClient } from "../constants.js"
 
 const serverManager = new ServerManager()
 
-export async function uninstall(serverId: string, client: ValidClient): Promise<void> {
+export async function uninstall(
+	serverId: string,
+	client: ValidClient,
+): Promise<void> {
 	try {
 		// ensure client is valid
 		if (client && !VALID_CLIENTS.includes(client as ValidClient)) {
@@ -43,7 +46,9 @@ export async function uninstall(serverId: string, client: ValidClient): Promise<
 
 		// Perform uninstallation
 		await serverManager.uninstallServer(serverId, client)
-		console.log(chalk.green(`\nSuccessfully uninstalled ${serverId} for ${client}`))
+		console.log(
+			chalk.green(`\nSuccessfully uninstalled ${serverId} for ${client}`),
+		)
 		if (client === "claude") {
 			console.log(
 				chalk.yellow(

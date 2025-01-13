@@ -67,10 +67,16 @@ export async function listInstalledServers(client: ValidClient): Promise<void> {
 	}
 
 	const action = await displayServerDetails(answer.selectedServer)
-	await handleServerAction(answer.selectedServer, action, {
-		onUninstall: () => listInstalledServers(client),
-		onBack: () => listInstalledServers(client),
-	}, true, client)
+	await handleServerAction(
+		answer.selectedServer,
+		action,
+		{
+			onUninstall: () => listInstalledServers(client),
+			onBack: () => listInstalledServers(client),
+		},
+		true,
+		client,
+	)
 }
 
 function areArraysEqual(arr1: string[], arr2: string[]): boolean {
