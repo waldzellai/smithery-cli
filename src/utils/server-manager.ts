@@ -16,7 +16,7 @@ export class ServerManager {
 	private validateConnection(server: ResolvedServer): ConnectionDetails {
 		const connection = server.connections?.[0]
 		if (!connection) {
-			throw new Error("No connection configuration found")
+			throw new Error("No connection configuration found or server has not been deployed.")
 		}
 		return connection
 	}
