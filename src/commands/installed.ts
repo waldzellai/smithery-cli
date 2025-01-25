@@ -41,7 +41,7 @@ export async function listInstalledServers(client: ValidClient): Promise<void> {
 		!installedServersCache ||
 		!areArraysEqual(
 			denormalizedIds,
-			installedServersCache.map((server) => server.id),
+			installedServersCache.map((server) => server.qualifiedName),
 		)
 	) {
 		installedServersCache = await fetchServers(client, denormalizedIds)

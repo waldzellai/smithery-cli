@@ -14,7 +14,7 @@ export function formatServerChoice(
 ): ServerChoice {
 	const prefix = showInstallStatus ? (server.isInstalled ? "✓ " : "  ") : ""
 	return {
-		name: `${prefix}${server.name} | ${server.id}`,
+		name: `${prefix}${server.name} | ${server.qualifiedName}`,
 		value: server,
 		short: server.name,
 	}
@@ -70,7 +70,7 @@ export async function displayServerDetails(
 	includeBack = true,
 ): Promise<"install" | "uninstall" | "back" | "exit"> {
 	console.log(`\n${chalk.bold.cyan("Server Details:")}`)
-	console.log(chalk.bold("ID:          ") + server.id)
+	console.log(chalk.bold("ID:          ") + server.qualifiedName)
 	console.log(chalk.bold("Name:        ") + server.name)
 
 	const choices = [

@@ -35,17 +35,10 @@ export class ServerManager {
 	): ConfiguredServer {
 		// Convert config to URL-safe string that's still somewhat readable
 		const encodedConfig = JSON.stringify(JSON.stringify(userConfig))
-		
+
 		return {
 			command: "npx",
-			args: [
-				"-y",
-				"@smithery/cli",
-				"run",
-				serverId,
-				"--config",
-				encodedConfig,
-			],
+			args: ["-y", "@smithery/cli", "run", serverId, "--config", encodedConfig],
 		}
 	}
 
@@ -57,9 +50,16 @@ export class ServerManager {
 		const configValues = await collectConfigValues(connection) // config values collected from configschema
 
 		// Update: Instead of getting config from registry POST, format it for run command
-		const serverConfig = this.formatServerConfig(server.id, configValues)
+		const serverConfig = this.formatServerConfig(
+			server.qualifiedName,
+			configValues,
+		)
 
-		await this.configManager.installServer(server.id, serverConfig, client)
+		await this.configManager.installServer(
+			server.qualifiedName,
+			serverConfig,
+			client,
+		)
 		await promptForRestart(client)
 	}
 

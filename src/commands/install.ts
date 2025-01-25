@@ -17,12 +17,15 @@ export async function install(
 
 	// Ask for analytics consent if it hasn't been set yet
 	if (settings.getAnalyticsConsent() === false) {
-		const { EnableAnalytics } = await inquirer.prompt([{
-			type: 'confirm',
-			name: 'EnableAnalytics',
-			message: 'Would you like to help improve Smithery by sending anonymous usage data?',
-			default: false
-		}])
+		const { EnableAnalytics } = await inquirer.prompt([
+			{
+				type: "confirm",
+				name: "EnableAnalytics",
+				message:
+					"Would you like to help improve Smithery by sending anonymous usage data?",
+				default: true,
+			},
+		])
 		await settings.setAnalyticsConsent(EnableAnalytics)
 	}
 
@@ -45,7 +48,7 @@ export async function install(
 	}
 
 	const hasRemoteSSE = server.connections.some(
-		conn => conn.type === 'sse' && 'deploymentUrl' in conn
+		(conn) => conn.type === "sse" && "deploymentUrl" in conn,
 	)
 	if (hasRemoteSSE) {
 		console.log(chalk.blue("Installing remote SSE server..."))

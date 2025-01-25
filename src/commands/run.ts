@@ -21,13 +21,15 @@ export async function run(serverId: string, config: Record<string, unknown>) {
 		}
 
 		console.error("[Runner] Resolved server details:", {
-			id: resolvedServer.id,
+			id: resolvedServer.qualifiedName,
 			connectionTypes: resolvedServer.connections.map((c) => c.type),
 		})
 
 		const server = new GatewayServer()
 		// Pass userId if analytics consent was given
-		const userId = settings.getAnalyticsConsent() ? settings.getUserId() : undefined
+		const userId = settings.getAnalyticsConsent()
+			? settings.getUserId()
+			: undefined
 		await server.run(resolvedServer, config, userId)
 	} catch (error) {
 		console.error("[Runner] Fatal error:", error)

@@ -1,26 +1,29 @@
-import { Server } from "@modelcontextprotocol/sdk/server/index.js"
 import { Client } from "@modelcontextprotocol/sdk/client/index.js"
-import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import { SSEClientTransport } from "@modelcontextprotocol/sdk/client/sse.js"
-import type {
-	ClientRequest,
-	ServerCapabilities,
-} from "@modelcontextprotocol/sdk/types.js"
-import type { z } from "zod"
-import { HandlerManager, type ServerContext } from "../utils/mcp-handlers.js"
-import type {
-	ResolvedServer,
-	ConfiguredStdioServer,
-} from "../types/registry.js"
-import { createSmitheryUrl } from "@smithery/sdk/config.js"
-import { collectConfigValues } from "../utils/runtime-utils.js"
 import {
 	StdioClientTransport,
 	getDefaultEnvironment,
 } from "@modelcontextprotocol/sdk/client/stdio.js"
-import { REGISTRY_ENDPOINT } from "../constants.js"
+import { Server } from "@modelcontextprotocol/sdk/server/index.js"
+import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import { DEFAULT_REQUEST_TIMEOUT_MSEC } from "@modelcontextprotocol/sdk/shared/protocol.js"
+import {
+	CallToolRequestSchema,
+	type JSONRPCMessage,
+	type ClientRequest,
+	type ServerCapabilities,
+} from "@modelcontextprotocol/sdk/types.js"
+import { createSmitheryUrl } from "@smithery/sdk/config.js"
+import type { z } from "zod"
+import { ANALYTICS_ENDPOINT, REGISTRY_ENDPOINT } from "../constants.js"
+import type {
+	ConfiguredStdioServer,
+	ResolvedServer,
+} from "../types/registry.js"
+import { HandlerManager, type ServerContext } from "../utils/mcp-handlers.js"
+import { collectConfigValues } from "../utils/runtime-utils.js"
 
+import { pick } from "lodash"
 export class GatewayServer {
 	private server!: Server
 	private client: Client
@@ -72,7 +75,7 @@ export class GatewayServer {
 		const context: ServerContext = {
 			server: this.server,
 			makeRequest: this.makeRequest.bind(this),
-			isReconnecting: this.isReconnecting
+			isReconnecting: this.isReconnecting,
 		}
 
 		this.handlerManager = new HandlerManager(context)
@@ -93,7 +96,7 @@ export class GatewayServer {
 			console.error("[Gateway] SSE client error:", error)
 			if (!this.closing) {
 				// For SSE connections, attempt reconnection before cleanup
-				const reconnected = await this.attemptReconnection();
+				const reconnected = await this.attemptReconnection()
 				if (!reconnected) {
 					this.cleanup().catch((err) => {
 						console.error("[Gateway] Cleanup error during error handling:", err)
@@ -115,7 +118,7 @@ export class GatewayServer {
 			console.error("[Gateway] SSE client closed")
 			if (!this.closing) {
 				// For SSE connections, attempt reconnection before cleanup
-				const reconnected = await this.attemptReconnection();
+				const reconnected = await this.attemptReconnection()
 				if (!reconnected) {
 					this.cleanup().catch((err) => {
 						console.error("[Gateway] Cleanup error during close:", err)
@@ -158,6 +161,7 @@ export class GatewayServer {
 	private async handleStdioConnection(
 		serverDetails: ResolvedServer,
 		config: Record<string, unknown>,
+		// Only available if user gives analytics consent
 		userId?: string,
 	): Promise<void> {
 		// Find the STDIO connection details
@@ -173,7 +177,7 @@ export class GatewayServer {
 
 		// Get the configured command from registry with processed config
 		const response = await fetch(
-			`${REGISTRY_ENDPOINT}/servers/${serverDetails.id}`,
+			`${REGISTRY_ENDPOINT}/servers/${serverDetails.qualifiedName}`,
 			{
 				method: "POST",
 				headers: {
@@ -234,7 +238,10 @@ export class GatewayServer {
 
 			// Create server with the discovered capabilities
 			this.server = new Server(
-				{ name: `smithery-runner-${serverDetails.id}`, version: "1.0.0" },
+				{
+					name: `smithery-runner-${serverDetails.qualifiedName}`,
+					version: "1.0.0",
+				},
 				{ capabilities },
 			)
 
@@ -254,6 +261,32 @@ export class GatewayServer {
 				clientTransport.stderr.on("data", (chunk: Buffer) => {
 					console.error("[Gateway] Child process stderr:", chunk.toString())
 				})
+			}
+
+			// Track tool usage if consent is given
+			if (userId) {
+				const onmessage = serverTransport.onmessage?.bind(serverTransport)
+				serverTransport.onmessage = (msg: JSONRPCMessage) => {
+					const { data, error } = CallToolRequestSchema.safeParse(msg)
+					if (!error && ANALYTICS_ENDPOINT) {
+						// Done async
+						fetch(ANALYTICS_ENDPOINT, {
+							method: "POST",
+							headers: {
+								"Content-Type": "application/json",
+							},
+							body: JSON.stringify({
+								eventName: "tool_call",
+								payload: {
+									connectionType: "stdio",
+									serverQualifiedName: serverDetails.qualifiedName,
+									toolParams: pick(data.params, "name"),
+								},
+							}),
+						})
+					}
+					onmessage?.(msg)
+				}
 			}
 		} catch (error) {
 			console.error("[Gateway] Error during STDIO setup:", error)
@@ -296,7 +329,7 @@ export class GatewayServer {
 		config: Record<string, unknown>,
 	): Promise<void> {
 		// Store connection details for potential reconnection
-		this.currentConnectionDetails = { serverDetails, config };
+		this.currentConnectionDetails = { serverDetails, config }
 
 		// Get SSE connection
 		const sseConnection = serverDetails.connections.find(
@@ -320,9 +353,9 @@ export class GatewayServer {
 			const sseTransport = new SSEClientTransport(new URL(connectionUrl))
 			await this.client.connect(sseTransport)
 			console.error("[Gateway] Connected to remote SSE server")
-			
+
 			// Reset reconnection attempts after successful connection
-			this.reconnectAttempts = 0;
+			this.reconnectAttempts = 0
 
 			// Get capabilities
 			const capabilities = this.client.getServerCapabilities() || {}
@@ -330,7 +363,10 @@ export class GatewayServer {
 
 			// Create server with the discovered capabilities
 			this.server = new Server(
-				{ name: `smithery-runner-${serverDetails.id}`, version: "1.0.0" },
+				{
+					name: `smithery-runner-${serverDetails.qualifiedName}`,
+					version: "1.0.0",
+				},
 				{ capabilities },
 			)
 
@@ -361,22 +397,22 @@ export class GatewayServer {
 		}
 
 		if (this.reconnectAttempts >= this.maxReconnectAttempts) {
-			console.error('[Gateway] Max reconnection attempts reached')
+			console.error("[Gateway] Max reconnection attempts reached")
 			return false
 		}
 
 		const delay = Math.min(
 			this.baseReconnectDelay * Math.pow(2, this.reconnectAttempts),
-			30000 // max 30 seconds
+			30000, // max 30 seconds
 		)
 
 		console.error(
 			`[Gateway] Attempting reconnection in ${delay}ms (attempt ${
 				this.reconnectAttempts + 1
-			}/${this.maxReconnectAttempts})`
+			}/${this.maxReconnectAttempts})`,
 		)
 
-		await new Promise(resolve => setTimeout(resolve, delay))
+		await new Promise((resolve) => setTimeout(resolve, delay))
 		this.reconnectAttempts++
 
 		this.isReconnecting = true
@@ -384,21 +420,21 @@ export class GatewayServer {
 		try {
 			await this.handleSSEConnection(
 				this.currentConnectionDetails.serverDetails,
-				this.currentConnectionDetails.config
+				this.currentConnectionDetails.config,
 			)
-			console.error('[Gateway] Successfully reconnected')
+			console.error("[Gateway] Successfully reconnected")
 			this.reconnectAttempts = 0
 			this.isReconnecting = false
 			return true
 		} catch (error) {
-			console.error('[Gateway] Reconnection failed:', error)
+			console.error("[Gateway] Reconnection failed:", error)
 			this.isReconnecting = false
 			return false
 		}
 	}
 
 	public get reconnecting(): boolean {
-		return this.isReconnecting;
+		return this.isReconnecting
 	}
 
 	async run(

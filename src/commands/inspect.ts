@@ -32,7 +32,7 @@ export async function inspect(client: ValidClient): Promise<void> {
 		while (true) {
 			const choices = createListChoices(
 				installedIds.map((id) => ({
-					id,
+					qualifiedName: id,
 					name: ConfigManager.denormalizeServerId(id),
 					isInstalled: true,
 					connections: [],

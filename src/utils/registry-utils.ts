@@ -51,7 +51,7 @@ export async function resolveServer(
 			// console.log(`Server not found in registry. Is installed: ${isInstalled}`)
 			if (isInstalled) {
 				return {
-					id: serverId,
+					qualifiedName: serverId,
 					name: serverId,
 					connections: [],
 					isInstalled: true,
@@ -109,7 +109,7 @@ export async function resolveServer(
 		)
 
 		const result = {
-			id: registryServer.qualifiedName,
+			qualifiedName: registryServer.qualifiedName,
 			name: registryServer.displayName,
 			connections: processedConnections,
 			isInstalled,
@@ -124,7 +124,7 @@ export async function resolveServer(
 
 		return result
 	} catch (error) {
-		console.error('Error resolving server:', error)
+		console.error("Error resolving server:", error)
 		return null
 	}
 }

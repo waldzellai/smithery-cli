@@ -31,7 +31,7 @@ export async function handleServerAction(
 			return // Exit after successful installation
 		case "uninstall":
 			if (await confirmUninstall(server.name)) {
-				await serverManager.uninstallServer(server.id, client)
+				await serverManager.uninstallServer(server.qualifiedName, client)
 				console.log(chalk.green(`Successfully uninstalled ${server.name}`))
 				server.isInstalled = false
 				if (handlers.onUninstall) {

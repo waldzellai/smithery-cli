@@ -20,9 +20,12 @@ import {
 } from "@modelcontextprotocol/sdk/types.js"
 
 export interface ServerContext {
-	server: Server;
-	makeRequest: <T extends z.ZodType>(request: ClientRequest, schema: T) => Promise<z.infer<T>>;
-	isReconnecting: boolean;
+	server: Server
+	makeRequest: <T extends z.ZodType>(
+		request: ClientRequest,
+		schema: T,
+	) => Promise<z.infer<T>>
+	isReconnecting: boolean
 }
 
 // bridge between MCP serer (remote / STDIO child) and our proxy
@@ -50,41 +53,47 @@ export class HandlerManager {
 	}
 
 	private setupToolHandlers(): void {
-		this.context.server.setRequestHandler(ListToolsRequestSchema, async (request) => {
-			console.error(
-				"[Gateway] ListTools request:",
-				JSON.stringify(request, null, 2),
-			)
-			const response = await this.context.makeRequest(
-				{ method: "tools/list" as const, params: {} },
-				ListToolsResultSchema,
-			)
-			return response
-		})
-
-		this.context.server.setRequestHandler(CallToolRequestSchema, async (request) => {
-			console.error(
-				"[Gateway] CallTool request:",
-				JSON.stringify(request, null, 2),
-			)
-			try {
-				const response = await this.context.makeRequest(
-					{
-						method: "tools/call" as const,
-						params: request.params,
-					},
-					CompatibilityCallToolResultSchema,
-				)
+		this.context.server.setRequestHandler(
+			ListToolsRequestSchema,
+			async (request) => {
 				console.error(
-					"[Gateway] CallTool response:",
-					JSON.stringify(response, null, 2),
+					"[Gateway] ListTools request:",
+					JSON.stringify(request, null, 2),
+				)
+				const response = await this.context.makeRequest(
+					{ method: "tools/list" as const, params: {} },
+					ListToolsResultSchema,
 				)
 				return response
-			} catch (error) {
-				console.error("[Gateway] CallTool error:", error)
-				throw error
-			}
-		})
+			},
+		)
+
+		this.context.server.setRequestHandler(
+			CallToolRequestSchema,
+			async (request) => {
+				console.error(
+					"[Gateway] CallTool request:",
+					JSON.stringify(request, null, 2),
+				)
+				try {
+					const response = await this.context.makeRequest(
+						{
+							method: "tools/call" as const,
+							params: request.params,
+						},
+						CompatibilityCallToolResultSchema,
+					)
+					console.error(
+						"[Gateway] CallTool response:",
+						JSON.stringify(response, null, 2),
+					)
+					return response
+				} catch (error) {
+					console.error("[Gateway] CallTool error:", error)
+					throw error
+				}
+			},
+		)
 	}
 
 	private setupResourceHandlers(): void {
@@ -93,9 +102,10 @@ export class HandlerManager {
 			async (request) => {
 				if (this.context.isReconnecting) {
 					return {
-						resources: [ // send empty response during reconnection
-							{}
-						]
+						resources: [
+							// send empty response during reconnection
+							{},
+						],
 					}
 				}
 
@@ -151,36 +161,42 @@ export class HandlerManager {
 	}
 
 	private setupPromptHandlers(): void {
-		this.context.server.setRequestHandler(ListPromptsRequestSchema, async (request) => {
-			console.error(
-				"[Gateway] ListPrompts request:",
-				JSON.stringify(request, null, 2),
-			)
-			const response = await this.context.makeRequest(
-				{ method: "prompts/list" as const, params: {} },
-				ListPromptsResultSchema,
-			)
-			return response
-		})
-
-		this.context.server.setRequestHandler(GetPromptRequestSchema, async (request) => {
-			console.error(
-				"[Gateway] GetPrompt request:",
-				JSON.stringify(request, null, 2),
-			)
-			try {
+		this.context.server.setRequestHandler(
+			ListPromptsRequestSchema,
+			async (request) => {
+				console.error(
+					"[Gateway] ListPrompts request:",
+					JSON.stringify(request, null, 2),
+				)
 				const response = await this.context.makeRequest(
-					{
-						method: "prompts/get" as const,
-						params: request.params,
-					},
-					GetPromptResultSchema,
+					{ method: "prompts/list" as const, params: {} },
+					ListPromptsResultSchema,
 				)
 				return response
-			} catch (error) {
-				console.error("[Gateway] GetPrompt error:", error)
-				throw error
-			}
-		})
+			},
+		)
+
+		this.context.server.setRequestHandler(
+			GetPromptRequestSchema,
+			async (request) => {
+				console.error(
+					"[Gateway] GetPrompt request:",
+					JSON.stringify(request, null, 2),
+				)
+				try {
+					const response = await this.context.makeRequest(
+						{
+							method: "prompts/get" as const,
+							params: request.params,
+						},
+						GetPromptResultSchema,
+					)
+					return response
+				} catch (error) {
+					console.error("[Gateway] GetPrompt error:", error)
+					throw error
+				}
+			},
+		)
 	}
 }

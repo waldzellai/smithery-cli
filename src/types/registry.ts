@@ -44,7 +44,7 @@ export type ConnectionDetails = z.infer<typeof ConnectionDetailsSchema>
 
 // Resolved server (after we check against our registry on installation status)
 export interface ResolvedServer {
-	id: string
+	qualifiedName: string
 	name: string
 	isInstalled: boolean
 	client?: string
