@@ -32,11 +32,13 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Create .env file
+        run: |
+          echo "REGISTRY_ENDPOINT=${{ secrets.REGISTRY_ENDPOINT }}" >> .env
+          echo "ANALYTICS_ENDPOINT=${{ secrets.ANALYTICS_ENDPOINT }}" >> .env
+
       - name: Build project
         run: npm run build
-        env:
-          REGISTRY_ENDPOINT: ${{ secrets.REGISTRY_ENDPOINT }}
-          ANALYTICS_ENDPOINT: ${{ secrets.ANALYTICS_ENDPOINT }}
 
       - name: Configure Git
         run: |
