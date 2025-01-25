@@ -2,12 +2,11 @@ import { config } from "dotenv"
 import * as esbuild from "esbuild"
 
 // Load environment variables into a define object
-const configOutput = config().parsed
+config()
 const define = {}
-if (configOutput) {
-	for (const k in configOutput) {
-		define[`process.env.${k}`] = JSON.stringify(configOutput[k])
-	}
+
+for (const k in process.env) {
+	define[`process.env.${k}`] = JSON.stringify(process.env[k])
 }
 
 await esbuild.build({
