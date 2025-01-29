@@ -81,11 +81,15 @@ export const createWSRunner = async (
 
 		transport.onmessage = (message) => {
 			try {
-				// If we receive an error, close the connection
 				if ("error" in message) {
-					transport.onerror?.(
-						new Error(`WebSocket error: ${JSON.stringify(message.error)}`),
-					)
+					// If we receive an error regarding misconfiguration, close the connection
+					console.error(`WebSocket error: ${JSON.stringify(message.error)}`)
+					if (
+						message.error.message === "Missing configuration" ||
+						message.error.message === "Invalid configuration"
+					) {
+						process.exit(1)
+					}
 				}
 
 				console.log(JSON.stringify(message))
