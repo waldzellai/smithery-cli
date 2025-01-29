@@ -1,29 +1,28 @@
+import { Client } from "@modelcontextprotocol/sdk/client/index.js"
 import {
 	StdioClientTransport,
 	getDefaultEnvironment,
 } from "@modelcontextprotocol/sdk/client/stdio.js"
+import { Server } from "@modelcontextprotocol/sdk/server/index.js"
+import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
+import { DEFAULT_REQUEST_TIMEOUT_MSEC } from "@modelcontextprotocol/sdk/shared/protocol.js"
 import {
 	CallToolRequestSchema,
-	type JSONRPCMessage,
 	type ClientRequest,
+	type JSONRPCMessage,
 	type ServerCapabilities,
 } from "@modelcontextprotocol/sdk/types.js"
+import { pick } from "lodash"
+import type { z } from "zod"
+import { ANALYTICS_ENDPOINT, REGISTRY_ENDPOINT } from "../constants.js"
 import type {
 	ConfiguredStdioServer,
 	ResolvedServer,
 } from "../types/registry.js"
-import { Client } from "@modelcontextprotocol/sdk/client/index.js"
-import { Server } from "@modelcontextprotocol/sdk/server/index.js"
-import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
-import type { z } from "zod"
 import { HandlerManager, type ServerContext } from "../utils/mcp-handlers.js"
 import { collectConfigValues } from "../utils/runtime-utils.js"
-import { pick } from "lodash"
-import { SSERunner } from "./sse-runner.js"
-import { DEFAULT_REQUEST_TIMEOUT_MSEC } from "@modelcontextprotocol/sdk/shared/protocol.js"
-import { ANALYTICS_ENDPOINT, REGISTRY_ENDPOINT } from "../constants.js"
 
-export class SmitheryRunner {
+export class StdioRunner {
 	private server!: Server
 	private client: Client
 	private handlerManager!: HandlerManager
@@ -85,7 +84,7 @@ export class SmitheryRunner {
 		}
 
 		this.client.onerror = async (error) => {
-			console.error("[Gateway] SSE client error:", error)
+			console.error("[Gateway] client error:", error)
 			if (!this.closing) {
 				this.cleanup().catch((err) => {
 					console.error("[Gateway] Cleanup error during error handling:", err)
@@ -103,7 +102,7 @@ export class SmitheryRunner {
 		}
 
 		this.client.onclose = async () => {
-			console.error("[Gateway] SSE client closed")
+			console.error("[Gateway] client closed")
 			if (!this.closing) {
 				this.cleanup().catch((err) => {
 					console.error("[Gateway] Cleanup error during close:", err)
@@ -125,7 +124,7 @@ export class SmitheryRunner {
 
 		try {
 			if (this.client) {
-				console.error("[Gateway] Closing SSE client...")
+				console.error("[Gateway] Closing client...")
 				await this.client.close()
 			}
 
@@ -142,7 +141,7 @@ export class SmitheryRunner {
 		}
 	}
 
-	private async handleStdioConnection(
+	async connect(
 		serverDetails: ResolvedServer,
 		config: Record<string, unknown>,
 		// Only available if user gives analytics consent
@@ -306,54 +305,5 @@ export class SmitheryRunner {
 
 		process.once("SIGTERM", cleanupHandler)
 		process.once("SIGINT", cleanupHandler)
-	}
-
-	async run(
-		serverDetails: ResolvedServer,
-		config: Record<string, unknown>,
-		userId?: string,
-	): Promise<void> {
-		try {
-			const hasSSE = serverDetails.connections.some(
-				(conn) => conn.type === "sse",
-			);
-			const hasStdio = serverDetails.connections.some(
-				(conn) => conn.type === "stdio",
-			);
-
-			if (hasSSE) {
-				const sseConnection = serverDetails.connections.find(
-					(conn) => conn.type === "sse",
-				);
-				if (!sseConnection?.deploymentUrl) {
-					throw new Error("SSE connection missing deployment URL");
-				}
-
-				const runner = new SSERunner(sseConnection.deploymentUrl, config);
-				await runner.connect();
-
-				process.stdin.on("data", (data) => runner.processMessage(data));
-				
-				process.on("SIGINT", () => {
-					console.error("Shutting down SSE Runner...");
-					runner.cleanup();
-					process.exit(0);
-				});
-				
-				process.on("SIGTERM", () => {
-					console.error("Shutting down SSE Runner...");
-					runner.cleanup();
-					process.exit(0);
-				});
-
-			} else if (hasStdio) {
-				await this.handleStdioConnection(serverDetails, config, userId);
-			} else {
-				throw new Error("No connection types found. Server not deployed.");
-			}
-		} catch (error) {
-			console.error("[Gateway] Setup error:", error);
-			throw error;
-		}
 	}
 }
