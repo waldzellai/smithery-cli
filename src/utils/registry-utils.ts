@@ -82,8 +82,7 @@ export async function resolveServer(
 								exampleConfig: connection.exampleConfig,
 							}
 						}
-					} catch (error) {
-					}
+					} catch (error) {}
 				}
 				return connection
 			}),

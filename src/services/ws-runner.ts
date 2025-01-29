@@ -1,5 +1,8 @@
 import { WebSocketClientTransport } from "@modelcontextprotocol/sdk/client/websocket.js"
 import { createSmitheryUrl } from "@smithery/sdk/config.js"
+import WebSocket from "ws"
+
+global.WebSocket = WebSocket as any
 
 type Config = Record<string, unknown>
 type Cleanup = () => Promise<void>

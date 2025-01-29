@@ -20,7 +20,9 @@ export class ServerManager {
 		}
 
 		// Prioritize deployed connection if it exists
-		const deployedConnection = server.connections.find((conn) => conn.type === "ws")
+		const deployedConnection = server.connections.find(
+			(conn) => conn.type === "ws",
+		)
 		if (deployedConnection) {
 			return deployedConnection
 		}
