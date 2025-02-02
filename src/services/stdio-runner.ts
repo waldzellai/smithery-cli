@@ -1,258 +1,58 @@
-import { Client } from "@modelcontextprotocol/sdk/client/index.js"
+import type { ResolvedServer } from "../types/registry.js"
+import { collectConfigValues } from "../utils/runtime-utils.js"
+import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js"
+import { getDefaultEnvironment } from "@modelcontextprotocol/sdk/client/stdio.js"
+import { getServerConfiguration } from "../utils/registry-utils.js"
+import { ANALYTICS_ENDPOINT } from "../constants.js"
 import {
-	StdioClientTransport,
-	getDefaultEnvironment,
-} from "@modelcontextprotocol/sdk/client/stdio.js"
-import { Server } from "@modelcontextprotocol/sdk/server/index.js"
-import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
-import { DEFAULT_REQUEST_TIMEOUT_MSEC } from "@modelcontextprotocol/sdk/shared/protocol.js"
-import {
-	CallToolRequestSchema,
-	type ClientRequest,
 	type JSONRPCMessage,
-	type ServerCapabilities,
+	CallToolRequestSchema,
+	type CallToolRequest,
+	type JSONRPCError,
+	ErrorCode,
 } from "@modelcontextprotocol/sdk/types.js"
 import { pick } from "lodash"
-import type { z } from "zod"
-import { ANALYTICS_ENDPOINT, REGISTRY_ENDPOINT } from "../constants.js"
-import type {
-	ConfiguredStdioServer,
-	ResolvedServer,
-} from "../types/registry.js"
-import { HandlerManager, type ServerContext } from "../utils/mcp-handlers.js"
-import { collectConfigValues } from "../utils/runtime-utils.js"
 
-export class StdioRunner {
-	private server!: Server
-	private client: Client
-	private handlerManager!: HandlerManager
-	private closing = false
-	private requestTimeout = DEFAULT_REQUEST_TIMEOUT_MSEC
-	private isReconnecting = false
+type Config = Record<string, unknown>
+type Cleanup = () => Promise<void>
 
-	constructor() {
-		this.closing = false
+export const createStdioRunner = async (
+	serverDetails: ResolvedServer,
+	config: Config,
+	userId?: string,
+): Promise<Cleanup> => {
+	let stdinBuffer = ""
+	let isReady = false
+	let transport: StdioClientTransport | null = null
 
-		this.client = new Client(
-			{ name: "smithery-runner", version: "1.0.0" },
-			{ capabilities: {} },
-		)
+	const handleError = (error: Error, context: string) => {
+		console.error(`[Runner] ${context}:`, error.message)
+		return error
 	}
 
-	private async makeRequest<T extends z.ZodType>(
-		request: ClientRequest,
-		schema: T,
-	) {
-		if (!this.client) {
-			throw new Error("Client not connected")
-		}
+	const processMessage = async (data: Buffer) => {
+		stdinBuffer += data.toString("utf8")
 
-		const abortController = new AbortController()
-		const timeoutId = setTimeout(() => {
-			abortController.abort("Request timed out")
-		}, this.requestTimeout)
+		if (!isReady) return // Wait for connection to be established
 
-		try {
-			const response = await this.client.request(request, schema, {
-				signal: abortController.signal,
-			})
-			return response
-		} finally {
-			clearTimeout(timeoutId)
-		}
-	}
+		const lines = stdinBuffer.split(/\r?\n/)
+		stdinBuffer = lines.pop() ?? ""
 
-	private async setupHandlers(Capabilities: ServerCapabilities): Promise<void> {
-		const context: ServerContext = {
-			server: this.server,
-			makeRequest: this.makeRequest.bind(this),
-			isReconnecting: this.isReconnecting,
-		}
+		for (const line of lines.filter(Boolean)) {
+			try {
+				const message = JSON.parse(line) as JSONRPCMessage
 
-		this.handlerManager = new HandlerManager(context)
-		await this.handlerManager.setupHandlers(Capabilities)
-	}
+				// Track tool usage if user consent is given
+				if (userId && ANALYTICS_ENDPOINT) {
+					const { data: toolData, error } = CallToolRequestSchema.safeParse(
+						message,
+					) as {
+						data: CallToolRequest | undefined
+						error: Error | null
+					}
 
-	private setupErrorHandling(): void {
-		this.server.onerror = (error) => {
-			console.error("[Gateway] Server error:", error)
-			if (!this.closing) {
-				this.cleanup().catch((err) => {
-					console.error("[Gateway] Cleanup error during error handling:", err)
-				})
-			}
-		}
-
-		this.client.onerror = async (error) => {
-			console.error("[Gateway] client error:", error)
-			if (!this.closing) {
-				this.cleanup().catch((err) => {
-					console.error("[Gateway] Cleanup error during error handling:", err)
-				})
-			}
-		}
-
-		this.server.onclose = () => {
-			console.error("[Gateway] Server closed")
-			if (!this.closing) {
-				this.cleanup().catch((err) => {
-					console.error("[Gateway] Cleanup error during close:", err)
-				})
-			}
-		}
-
-		this.client.onclose = async () => {
-			console.error("[Gateway] client closed")
-			if (!this.closing) {
-				this.cleanup().catch((err) => {
-					console.error("[Gateway] Cleanup error during close:", err)
-				})
-			}
-		}
-
-		process.on("SIGINT", () => this.cleanup())
-		process.on("SIGTERM", () => this.cleanup())
-	}
-
-	private async cleanup(): Promise<void> {
-		if (this.closing) {
-			return
-		}
-
-		this.closing = true
-		console.error("[Gateway] Starting cleanup...")
-
-		try {
-			if (this.client) {
-				console.error("[Gateway] Closing client...")
-				await this.client.close()
-			}
-
-			if (this.server) {
-				console.error("[Gateway] Closing server...")
-				await this.server.close()
-			}
-
-			console.error("[Gateway] Cleanup completed")
-			process.exit(0)
-		} catch (error) {
-			console.error("[Gateway] Fatal error during cleanup:", error)
-			process.exit(1)
-		}
-	}
-
-	async connect(
-		serverDetails: ResolvedServer,
-		config: Record<string, unknown>,
-		// Only available if user gives analytics consent
-		userId?: string,
-	): Promise<void> {
-		// Find the STDIO connection details
-		const stdioConnection = serverDetails.connections.find(
-			(conn) => conn.type === "stdio",
-		)
-		if (!stdioConnection) {
-			throw new Error("No STDIO connection found")
-		}
-
-		// Process config values using the connection's schema
-		const processedConfig = await collectConfigValues(stdioConnection, config)
-
-		// Get the configured command from registry with processed config
-		const response = await fetch(
-			`${REGISTRY_ENDPOINT}/servers/${serverDetails.qualifiedName}`,
-			{
-				method: "POST",
-				headers: {
-					"Content-Type": "application/json",
-				},
-				body: JSON.stringify({
-					connectionType: "stdio",
-					config: processedConfig,
-					userId,
-				}),
-			},
-		)
-
-		if (!response.ok) {
-			throw new Error(
-				`Failed to get server configuration: ${response.statusText}`,
-			)
-		}
-
-		const { result } = await response.json()
-		const serverConfig = result as ConfiguredStdioServer
-
-		console.error("[Gateway] Server configuration:", serverConfig)
-
-		const { command, args, env } = serverConfig
-		let clientTransport: StdioClientTransport | null = null
-
-		try {
-			// Merge default environment with provided env
-			const defaultEnv = getDefaultEnvironment()
-			const mergedEnv = {
-				...defaultEnv,
-				...(env || {}),
-			}
-
-			// Create client transport
-			clientTransport = new StdioClientTransport({
-				command,
-				args: args || [],
-				env: mergedEnv,
-				stderr: "pipe",
-			})
-
-			// Set up transport error handling
-			clientTransport.onerror = (error) => {
-				console.error("[Gateway] STDIO transport error:", error)
-				this.cleanup().catch((err) => {
-					console.error("[Gateway] Cleanup error during transport error:", err)
-				})
-			}
-
-			// Connect client to get capabilities
-			await this.client.connect(clientTransport)
-
-			// Get capabilities from the client
-			const capabilities = this.client.getServerCapabilities() || {}
-			console.error("[Gateway] Child process capabilities:", capabilities)
-
-			// Create server with the discovered capabilities
-			this.server = new Server(
-				{
-					name: `smithery-runner-${serverDetails.qualifiedName}`,
-					version: "1.0.0",
-				},
-				{ capabilities },
-			)
-
-			// Set up error handling
-			this.setupErrorHandling()
-
-			// Set up handlers based on capabilities
-			await this.setupHandlers(capabilities)
-
-			// Create and connect server transport
-			const serverTransport = new StdioServerTransport()
-			await this.server.connect(serverTransport)
-			console.error("[Gateway] STDIO server ready")
-
-			// Handle stderr output
-			if (clientTransport.stderr) {
-				clientTransport.stderr.on("data", (chunk: Buffer) => {
-					console.error("[Gateway] Child process stderr:", chunk.toString())
-				})
-			}
-
-			// Track tool usage if consent is given
-			if (userId) {
-				const onmessage = serverTransport.onmessage?.bind(serverTransport)
-				serverTransport.onmessage = (msg: JSONRPCMessage) => {
-					const { data, error } = CallToolRequestSchema.safeParse(msg)
-					if (!error && ANALYTICS_ENDPOINT) {
-						// Done async
+					if (!error) {
+						// Fire and forget analytics
 						fetch(ANALYTICS_ENDPOINT, {
 							method: "POST",
 							headers: {
@@ -263,47 +63,121 @@ export class StdioRunner {
 								payload: {
 									connectionType: "stdio",
 									serverQualifiedName: serverDetails.qualifiedName,
-									toolParams: pick(data.params, "name"),
+									toolParams: toolData ? pick(toolData.params, "name") : {},
 								},
 							}),
+						}).catch((err: Error) => {
+							console.error("[Runner] Analytics error:", err)
 						})
 					}
-					onmessage?.(msg)
 				}
-			}
-		} catch (error) {
-			console.error("[Gateway] Error during STDIO setup:", error)
 
-			// Attempt to clean up the transport if it was created
-			if (clientTransport) {
-				try {
-					await clientTransport.close()
-				} catch (closeError) {
-					console.error(
-						"[Gateway] Error closing transport during error recovery:",
-						closeError,
-					)
-				}
-			}
-
-			throw error
-		}
-
-		// Add cleanup handler for process termination
-		const cleanupHandler = () => {
-			if (clientTransport && !this.closing) {
-				console.error("[Gateway] Process termination detected, cleaning up...")
-				this.cleanup().catch((err) => {
-					console.error(
-						"[Gateway] Cleanup error during process termination:",
-						err,
-					)
-					process.exit(1)
-				})
+				await transport?.send(message)
+			} catch (error) {
+				handleError(error as Error, "Failed to send message to child process")
 			}
 		}
-
-		process.once("SIGTERM", cleanupHandler)
-		process.once("SIGINT", cleanupHandler)
 	}
+
+	const setupTransport = async () => {
+		console.error("[Runner] Starting child process setup...")
+		const stdioConnection = serverDetails.connections.find(
+			(conn) => conn.type === "stdio",
+		)
+		if (!stdioConnection) {
+			throw new Error("No STDIO connection found")
+		}
+
+		// Process config values and fetch server configuration
+		const processedConfig = await collectConfigValues(stdioConnection, config)
+		const serverConfig = await getServerConfiguration(
+			serverDetails.qualifiedName,
+			processedConfig,
+			"stdio",
+		)
+
+		if (!serverConfig || "type" in serverConfig) {
+			throw new Error("Failed to get valid stdio server configuration")
+		}
+
+		const { command, args = [], env = {} } = serverConfig
+
+		transport = new StdioClientTransport({
+			command: command,
+			args: args,
+			env: { ...getDefaultEnvironment(), ...env },
+		})
+
+		transport.onmessage = (message: JSONRPCMessage) => {
+			try {
+				if ("error" in message) {
+					const errorMessage = message as JSONRPCError
+					// Skip logging "Method not found" errors, let the client handle this
+					if (errorMessage.error?.code !== ErrorCode.MethodNotFound) {
+						console.error(`[Runner] Child process error:`, errorMessage.error)
+					}
+				}
+				// Forward the message to stdout
+				console.log(JSON.stringify(message))
+			} catch (error) {
+				handleError(error as Error, "Error handling message")
+			}
+		}
+
+		transport.onclose = () => {
+			console.error("[Runner] Child process terminated")
+			// If the process died unexpectedly, we should exit with an error
+			if (isReady) {
+				console.error("[Runner] Process terminated unexpectedly while running")
+				process.exit(1)
+			}
+			process.exit(0)
+		}
+
+		transport.onerror = (err) => {
+			console.error("[Runner] Child process error:", err.message)
+			if (err.message.includes("spawn")) {
+				console.error(
+					"[Runner] Failed to spawn child process - check if the command exists and is executable",
+				)
+			} else if (err.message.includes("permission")) {
+				console.error("[Runner] Permission error when running child process")
+			}
+			process.exit(1)
+		}
+
+		await transport.start()
+		isReady = true
+		// Process any buffered messages
+		await processMessage(Buffer.from(""))
+	}
+
+	const cleanup = async () => {
+		console.error("[Runner] Starting cleanup...")
+		if (transport) {
+			await transport.close()
+			transport = null
+		}
+		console.error("[Runner] Cleanup completed")
+	}
+
+	const handleExit = async () => {
+		console.error("[Runner] Shutting down STDIO Runner...")
+		await cleanup()
+		process.exit(0)
+	}
+
+	// Setup event handlers
+	process.on("SIGINT", handleExit)
+	process.on("SIGTERM", handleExit)
+	process.stdin.on("data", (data) =>
+		processMessage(data).catch((error) =>
+			handleError(error, "Error processing message"),
+		),
+	)
+
+	// Start the transport
+	await setupTransport()
+
+	return cleanup
 }
