@@ -40,7 +40,14 @@ export class ServerManager {
 
 		return {
 			command: "npx",
-			args: ["-y", "@smithery/cli@latest", "run", serverId, "--config", encodedConfig],
+			args: [
+				"-y",
+				"@smithery/cli@latest",
+				"run",
+				serverId,
+				"--config",
+				encodedConfig,
+			],
 		}
 	}
 

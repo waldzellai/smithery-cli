@@ -1,4 +1,9 @@
-export const VALID_CLIENTS = ["claude", "cline", "windsurf-next", "roo-cline"] as const
+export const VALID_CLIENTS = [
+	"claude",
+	"cline",
+	"windsurf",
+	"roo-cline",
+] as const
 export type ValidClient = (typeof VALID_CLIENTS)[number]
 
 export const REGISTRY_ENDPOINT = process.env.REGISTRY_ENDPOINT
