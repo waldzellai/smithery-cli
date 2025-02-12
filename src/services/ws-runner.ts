@@ -14,8 +14,9 @@ const createTransport = (
 	baseUrl: string,
 	config: Config,
 ): WebSocketClientTransport => {
-	const wsUrl = new URL("/ws", baseUrl.replace(/^http/, "ws")).toString()
-	return new WebSocketClientTransport(createSmitheryUrl(wsUrl, config))
+	const wsUrl = `${baseUrl.replace(/^http/, "ws")}${baseUrl.endsWith("/") ? "" : "/"}ws`
+	const url = createSmitheryUrl(wsUrl, config)
+	return new WebSocketClientTransport(url)
 }
 
 export const createWSRunner = async (
