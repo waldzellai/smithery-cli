@@ -19,7 +19,7 @@ interface Settings {
 }
 
 export class SmitherySettings {
-	private static CUSTOM_CONFIG_PATH: string | null = null
+	private static customConfigPath: string | null = null
 	private data: Settings | null = null
 	private settingsPath: string
 
@@ -28,8 +28,8 @@ export class SmitherySettings {
 	}
 
 	private getSettingsPath(): string {
-		if (SmitherySettings.CUSTOM_CONFIG_PATH)
-			return SmitherySettings.CUSTOM_CONFIG_PATH
+		if (SmitherySettings.customConfigPath)
+			return SmitherySettings.customConfigPath
 
 		const envPath = process.env.SMITHERY_CONFIG_PATH
 		if (envPath) return envPath
@@ -87,10 +87,7 @@ export class SmitherySettings {
 
 		try {
 			try {
-				const content = await fs.readFile(
-					this.settingsPath,
-					"utf-8",
-				)
+				const content = await fs.readFile(this.settingsPath, "utf-8")
 				this.data = JSON.parse(content)
 
 				// Ensure userId exists in loaded data
@@ -143,13 +140,13 @@ export class SmitherySettings {
 			return
 		}
 
-		SmitherySettings.CUSTOM_CONFIG_PATH = customPath
+		SmitherySettings.customConfigPath = customPath
 
 		try {
 			const exportCmd =
 				platform() === "win32"
-					? `$env:SMITHERY_CONFIG_PATH="${SmitherySettings.CUSTOM_CONFIG_PATH}"`
-					: `export SMITHERY_CONFIG_PATH="${SmitherySettings.CUSTOM_CONFIG_PATH}"`
+					? `$env:SMITHERY_CONFIG_PATH="${SmitherySettings.customConfigPath}"`
+					: `export SMITHERY_CONFIG_PATH="${SmitherySettings.customConfigPath}"`
 			const profileFile =
 				platform() === "win32"
 					? join(homedir(), "Documents", "WindowsPowerShell", "profile.ps1")
@@ -159,16 +156,13 @@ export class SmitherySettings {
 			console.log(`Added to ${profileFile}. Restart your shell to apply.`)
 		} catch (error) {
 			console.log(
-				`\n⚠️ Note: Add this line to your shell profile to persist the config path:\nexport SMITHERY_CONFIG_PATH="${SmitherySettings.CUSTOM_CONFIG_PATH}"`,
+				`\n⚠️ Note: Add this line to your shell profile to persist the config path:\nexport SMITHERY_CONFIG_PATH="${SmitherySettings.customConfigPath}"`,
 			)
 		}
 	}
 
 	private async save(): Promise<void> {
-		await fs.writeFile(
-			this.settingsPath,
-			JSON.stringify(this.data, null, 2),
-		)
+		await fs.writeFile(this.settingsPath, JSON.stringify(this.data, null, 2))
 	}
 
 	getUserId(): string {
