@@ -10,51 +10,19 @@ process.on("warning", (warning) => {
 	console.warn(warning)
 })
 
-import type { RegistryServer } from "./types/registry"
-import type { ConnectionDetails } from "./types/registry"
 import type { ValidClient } from "./constants"
 import type { ConfiguredServer } from "./types/registry"
 import {
 	collectConfigValues,
 	promptForRestart,
 	normalizeServerId,
+	checkAnalyticsConsent,
 } from "./utils"
 import { readConfig, writeConfig } from "./client-config"
 import { resolvePackage } from "./registry"
 import chalk from "chalk"
-
-function chooseConnection(server: RegistryServer): ConnectionDetails {
-	if (!server.connections?.length) {
-		throw new Error("No connection configuration found")
-	}
-
-	/* Prioritise WebSocket connection */
-	const wsConnection = server.connections.find(conn => conn.type === "ws")
-	if (wsConnection) return wsConnection
-
-	/* For stdio connections, prioritize published ones first */
-	const stdioConnections = server.connections.filter(conn => conn.type === "stdio")
-	const priorityOrder = ["npx", "uvx", "docker"]
-
-	/* Try published connections first */
-	for (const priority of priorityOrder) {
-		const connection = stdioConnections.find(
-			conn => conn.stdioFunction?.startsWith(priority) && conn.published
-		)
-		if (connection) return connection
-	}
-
-	/* Try unpublished connections */
-	for (const priority of priorityOrder) {
-		const connection = stdioConnections.find(
-			conn => conn.stdioFunction?.startsWith(priority)
-		)
-		if (connection) return connection
-	}
-
-	/* Fallback to first available connection if none match criteria */
-	return server.connections[0]
-}
+import { chooseConnection } from "./utils"
+import ora from "ora"
 
 function formatServerConfig(
 	qualifiedName: string,
@@ -81,7 +49,20 @@ export async function installServer(
 	qualifiedName: string,
 	client: ValidClient,
 ): Promise<void> {
-	const server = await resolvePackage(qualifiedName)
+	/* start resolving in background */
+	const serverPromise = resolvePackage(qualifiedName)
+
+	/* while resolving, prompt for analytics consent */
+	await checkAnalyticsConsent()
+	
+	/* if resolution isn't complete yet, show spinner */
+	const spinner = ora(`Resolving ${qualifiedName}...`).start()
+	const server = await serverPromise.catch(error => {
+		spinner.fail(`Failed to resolve ${qualifiedName}`)
+		throw error
+	})
+	spinner.succeed(`Successfully resolved ${qualifiedName}`)
+
 	const connection = chooseConnection(server)
 
 	/* inform users of remote server installation */
