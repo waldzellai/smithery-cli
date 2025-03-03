@@ -26,6 +26,9 @@ import {
 	normalizeServerId,
 	promptForRestart,
 	promptForUVInstall,
+	checkBunInstalled,
+	promptForBunInstall,
+	isBunRequired,
 } from "./utils"
 
 function formatServerConfig(
@@ -100,10 +103,27 @@ export async function installServer(
 			}
 		}
 
+		/* Check if Bun is required and install if needed */
+		if (isBunRequired(connection)) {
+			verbose("Bun installation check required")
+			const bunInstalled = await checkBunInstalled()
+			if (!bunInstalled) {
+				const installed = await promptForBunInstall()
+				if (!installed) {
+					console.warn(
+						chalk.yellow(
+							"Bun is not installed. The server might fail to launch.",
+						),
+					)
+				}
+			}
+		}
+
 		/* inform users of remote server installation */
 		const remote = server.connections.some(
 			(conn) => conn.type === "ws" && "deploymentUrl" in conn,
-		)
+		) && server.remote !== false
+
 		if (remote) {
 			verbose("Remote server detected, showing security notice")
 			console.log(
