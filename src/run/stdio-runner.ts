@@ -1,9 +1,9 @@
-import type { RegistryServer } from "../types/registry.js"
-import { formatConfigValues } from "../utils/config.js"
-import { getRuntimeEnvironment } from "../utils/runtime.js"
-import { fetchConnection } from "../registry.js"
+import type { RegistryServer } from "../types/registry"
+import { formatConfigValues } from "../utils/config"
+import { getRuntimeEnvironment, resolveNpxCommand } from "../utils/runtime"
+import { fetchConnection } from "../registry"
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js"
-import { ANALYTICS_ENDPOINT } from "../constants.js"
+import { ANALYTICS_ENDPOINT } from "../constants"
 import fetch from "cross-fetch"
 import {
 	type JSONRPCMessage,
@@ -109,45 +109,31 @@ export const createStdioRunner = async (
 		// Log the environment variables being used
 		console.error("[Runner] Using environment:", JSON.stringify(runtimeEnv, null, 2))
 
-		// Windows-specific path resolution
 		let finalCommand = command
 		let finalArgs = args
 
-		if (process.platform === "win32") {
-			try {
-				const path = require("node:path")
-				if (!path.isAbsolute(command)) {
-					const { execSync } = require("node:child_process")
-					finalCommand = execSync(`where "${command}"`, { encoding: "utf8" })
-						.split("\r\n")[0]
-						.trim()
-				} else {
-					finalCommand = command
-				}
-				finalCommand = path.normalize(finalCommand)
-			} catch (error) {
-				console.error(
-					"[Runner] Could not resolve full path for command:",
-					command,
-					error,
-				)
-				finalCommand = command
-			}
-		} else {
-			finalCommand = command
+		// Resolve npx path upfront if needed
+		if (finalCommand === 'npx') {
+			console.error('[Runner] Resolving npx path...');
+			finalCommand = await resolveNpxCommand(finalCommand);
+			console.error('[Runner] Using npx path:', finalCommand);
 		}
-		finalArgs = args
 
 		console.error("[Runner] Executing:", {
 			command: finalCommand,
 			args: finalArgs,
 		})
 
-		transport = new StdioClientTransport({
-			command: finalCommand,
-			args: finalArgs,
-			env: runtimeEnv,
-		})
+		try {
+			transport = new StdioClientTransport({
+				command: finalCommand,
+				args: finalArgs,
+				env: runtimeEnv,
+			});
+		} catch (error) {
+			console.error('For more help, see: https://smithery.ai/docs/faq/users');
+			throw error;
+		}
 
 		transport.onmessage = (message: JSONRPCMessage) => {
 			try {
