@@ -190,26 +190,51 @@ async function findNpxInNvm(): Promise<string | null> {
 export async function resolveNpxCommand(originalCommand: string): Promise<string> {
 	if (originalCommand !== 'npx') return originalCommand;
 	const isWin = process.platform === 'win32';
-	
-	// 1. Check current node process npx first
+
+	// 1. Try which/where command first
+	try {
+		const { stdout } = await execAsync(isWin ? 'where npx 2>nul' : 'which npx');
+		const paths = stdout
+			.trim()                     // Remove leading/trailing whitespace first
+			.split(/\r?\n/)            // Split on \n or \r\n
+			.map(p => p.trim())        // Trim each line again for safety
+			.filter(Boolean);          // Remove empty lines
+		
+		// Check all paths concurrently and take first valid one
+		const accessChecks = paths.map(async path => {
+			try {
+				await access(path);
+				return path;
+			} catch (e: unknown) {
+				console.debug(`[Runtime] Path ${path} inaccessible: ${e instanceof Error ? e.message : String(e)}`);
+				return null;
+			}
+		});
+		
+		const results = await Promise.all(accessChecks);
+		const validPath = results.find(p => p !== null);
+		if (validPath) return validPath;
+	} catch (error) {
+		console.error('[Runtime] which/where command failed to find npx:', error);
+	}
+
+	// 2. Check current node process npx
 	const nodeDir = process.execPath.replace(isWin ? /[\/\\]node\.exe$/ : /[\/\\]node$/, '');
 	const nodeDirNpx = isWin ? join(nodeDir, 'npx.cmd') : join(nodeDir, 'npx');
 	try {
 		await access(nodeDirNpx);
-		// console.error(`[Runtime] Resolved npx at: ${nodeDirNpx}`);
 		return nodeDirNpx;
 	} catch {
 		console.error('[Runtime] No npx found in current node directory');
 	}
 
-	// 2. Check NVM path
+	// 3. Check NVM path
 	const nvmPath = await findNpxInNvm();
 	if (nvmPath) {
-		// console.error(`[Runtime] Resolved npx in NVM at: ${nvmPath}`);
 		return nvmPath;
 	}
 
-	// 3. Check additional system paths as fallback
+	// 4. Check additional system paths as fallback
 	const searchPaths: string[] = [];
 	if (isWin) {
 		// Default npm and Node.js paths
@@ -240,7 +265,6 @@ export async function resolveNpxCommand(originalCommand: string): Promise<string
 	);
 	const validPath = results.find(p => p !== null);
 	if (validPath) {
-		// console.error(`[Runtime] Resolved npx at: ${validPath}`);
 		return validPath;
 	}
 
