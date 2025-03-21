@@ -16,7 +16,7 @@ import { readConfig, writeConfig } from "../client-config"
 import type { ValidClient } from "../constants"
 import { verbose } from "../logger"
 import { resolvePackage } from "../registry"
-import type { ConfiguredServer } from "../types/registry"
+import type { ConfiguredServer, ServerConfig } from "../types/registry"
 import {
 	checkUVInstalled,
 	isUVRequired,
@@ -26,7 +26,6 @@ import {
 	isBunRequired,
 } from "../utils/runtime"
 import {
-	normalizeServerId,
 	chooseConnection,
 	collectConfigValues,
 	getServerName,
@@ -36,20 +35,23 @@ import { promptForRestart } from "../utils/client"
 
 function formatServerConfig(
 	qualifiedName: string,
-	userConfig: Record<string, unknown>,
+	userConfig: ServerConfig,
+	apiKey?: string,
+	configNeeded: boolean = true // whether config flag is needed
 ): ConfiguredServer {
-	/* double stringify config to make it shell-safe */
-	const encodedConfig = JSON.stringify(JSON.stringify(userConfig))
-
 	// Base arguments for npx command
-	const npxArgs = [
-		"-y",
-		"@smithery/cli@latest",
-		"run",
-		qualifiedName,
-		"--config",
-		encodedConfig,
-	]
+	const npxArgs = ["-y", "@smithery/cli@latest", "run", qualifiedName]
+
+	// Always add API key if provided
+	if (apiKey) {
+		npxArgs.push("--key", apiKey)
+	}
+
+	if ((!apiKey || configNeeded)) {
+		/* double stringify config to make it shell-safe */
+		const encodedConfig = JSON.stringify(JSON.stringify(userConfig))
+		npxArgs.push("--config", encodedConfig)
+	}
 
 	// Use cmd /c for Windows platforms
 	if (process.platform === "win32") {
@@ -66,11 +68,22 @@ function formatServerConfig(
 	}
 }
 
-/* installs server for given client */
+/**
+ * Installs and configures a Smithery server for a specified client. 
+ * Prompts for config values if config not given OR saved config not valid
+ * 
+ * @param {string} qualifiedName - The fully qualified name of the server package to install
+ * @param {ValidClient} client - The client to install the server for
+ * @param {Record<string, unknown>} [configValues] - Optional configuration values for the server
+ * @param {string} [apiKey] - Optional API key to fetch saved config
+ * @returns {Promise<void>} A promise that resolves when installation is complete
+ * @throws Will throw an error if installation fails
+ */
 export async function installServer(
 	qualifiedName: string,
 	client: ValidClient,
 	configValues?: Record<string, unknown>,
+	apiKey?: string // api key is essentially a longer term goal to abstract away user passed config
 ): Promise<void> {
 	verbose(`Starting installation of ${qualifiedName} for client ${client}`)
 
@@ -152,19 +165,24 @@ export async function installServer(
 		/* collect config values from user or use provided config */
 		verbose(
 			configValues
-				? "Using provided config values"
-				: "Collecting config values from user",
+				? "Using provided config values" // provided values always override others
+				: "Collecting config values", // from user or from saved config
 		)
-		const collectedConfigValues = await collectConfigValues(
-			connection,
+		const { configValues: collectedConfigValues, isSavedConfig } = await collectConfigValues(
+			connection, 
 			configValues,
+			apiKey, 
+			qualifiedName
 		)
 		verbose(`Config values: ${JSON.stringify(collectedConfigValues, null, 2)}`)
+		verbose(`Is from saved config: ${isSavedConfig}`)
 
 		verbose("Formatting server configuration...")
 		const serverConfig = formatServerConfig(
 			qualifiedName,
 			collectedConfigValues,
+			apiKey,
+			!isSavedConfig // Only include config if saved config not valid
 		)
 		verbose(`Formatted server config: ${JSON.stringify(serverConfig, null, 2)}`)
 
