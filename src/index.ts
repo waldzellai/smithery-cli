@@ -35,6 +35,7 @@ const showHelp = () => {
 	console.log("    --config <json>    Provide configuration as JSON")
 	console.log("    --key <apikey>     Provide an API key")
 	console.log("  list clients         List available clients")
+	console.log("  list servers         List installed servers")
 	console.log("")
 	console.log("Global options:")
 	console.log("  --help               Show this help message")
@@ -51,8 +52,13 @@ const validateClient = (
 	command: string,
 	clientFlag: number,
 ): ValidClient | undefined => {
-	/* Run, inspect, and list commands don't need client validation */
-	if (["run", "inspect", "list"].includes(command)) {
+	/* Run and inspect commands don't need client validation */
+	if (["run", "inspect"].includes(command)) {
+		return undefined
+	}
+
+	/* List clients command doesn't need client validation */
+	if (command === "list" && argument === "clients") {
 		return undefined
 	}
 
@@ -140,7 +146,7 @@ async function main() {
 			await run(argument, config, apiKey)
 			break
 		case "list":
-			await list(argument)
+			await list(argument, client!)
 			break
 		default:
 			showHelp()
