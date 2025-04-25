@@ -1,31 +1,28 @@
 #!/usr/bin/env node
-import { fetchConfigWithApiKey, resolvePackage } from "../../registry.js"
+import { resolvePackage } from "../../registry.js"
 import {
 	getAnalyticsConsent,
 	initializeSettings,
 } from "../../smithery-config.js"
 import type { RegistryServer, ServerConfig } from "../../types/registry.js"
-import {
-	chooseConnection,
-	validateAndFormatConfig,
-} from "../../utils/config.js"
+import { chooseConnection } from "../../utils/config.js"
 import { createStdioRunner as startSTDIOrunner } from "./stdio-runner.js"
-import { createWSRunner as startWSRunner } from "./ws-runner.js"
 import { logWithTimestamp } from "./runner-utils.js"
+import { createStreamableHTTPRunner } from "./streamable-http-runner.js"
 
 /**
  * Runs a server with the specified configuration
  *
  * @param {string} qualifiedName - The qualified name of the server to run
  * @param {ServerConfig} config - Configuration values for the server
- * @param {string} [apiKey] - Optional API key to fetch saved configuration
+ * @param {string} apiKey - API key required for authentication
  * @returns {Promise<void>} A promise that resolves when the server is running or fails
  * @throws {Error} If the server cannot be resolved or connection fails
  */
 export async function run(
 	qualifiedName: string,
 	config: ServerConfig,
-	apiKey?: string,
+	apiKey: string | undefined,
 ) {
 	try {
 		const settingsResult = await initializeSettings()
@@ -35,43 +32,9 @@ export async function run(
 			)
 		}
 
-		let resolvedServer: RegistryServer | null = null
-		let finalConfig = config
-
-		// If API key is provided, fetch both config and server info in one call
-		if (apiKey) {
-			try {
-				const result = await fetchConfigWithApiKey(qualifiedName, apiKey)
-				resolvedServer = result.server
-				// Merge configs with proper schema validation
-				const connection = chooseConnection(result.server)
-				finalConfig = await validateAndFormatConfig(connection, {
-					...result.config,
-					...config,
-				})
-				logWithTimestamp("[Runner] Using saved configuration")
-			} catch (error) {
-				logWithTimestamp(
-					`[Runner] Failed to fetch config with API key: ${error}`,
-				)
-				logWithTimestamp("[Runner] Falling back to standard resolution")
-				resolvedServer = null // Ensure we do a fresh resolution below
-			}
-		}
-
-		// If we still don't have a server (either no API key or API key fetch failed)
-		if (!resolvedServer) {
-			resolvedServer = await resolvePackage(qualifiedName)
-		}
-
+		const resolvedServer = await resolvePackage(qualifiedName)
 		if (!resolvedServer) {
 			throw new Error(`Could not resolve server: ${qualifiedName}`)
-		}
-
-		// Format final config with schema validation if not already done
-		if (!apiKey) {
-			const connection = chooseConnection(resolvedServer)
-			finalConfig = await validateAndFormatConfig(connection, finalConfig)
 		}
 
 		logWithTimestamp(
@@ -82,12 +45,7 @@ export async function run(
 		)
 
 		const analyticsEnabled = await getAnalyticsConsent()
-		await pickServerAndRun(
-			resolvedServer,
-			finalConfig,
-			apiKey,
-			analyticsEnabled,
-		)
+		await pickServerAndRun(resolvedServer, config, analyticsEnabled, apiKey)
 	} catch (error) {
 		logWithTimestamp(
 			`[Runner] Error: ${error instanceof Error ? error.message : error}`,
@@ -101,6 +59,7 @@ export async function run(
  *
  * @param {RegistryServer} serverDetails - Details of the server to run, including connection options
  * @param {ServerConfig} config - Configuration values for the server
+ * @param {boolean} analyticsEnabled - Whether analytics are enabled for the server
  * @param {string} [apiKey] - Required for WS connections. Optional for stdio connections.
  * @returns {Promise<void>} A promise that resolves when the server is running
  * @throws {Error} If connection type is unsupported or deployment URL is missing for WS connections
@@ -109,16 +68,19 @@ export async function run(
 async function pickServerAndRun(
 	serverDetails: RegistryServer,
 	config: ServerConfig,
-	apiKey: string | undefined,
 	analyticsEnabled: boolean,
+	apiKey: string | undefined,
 ): Promise<void> {
 	const connection = chooseConnection(serverDetails)
 
-	if (connection.type === "ws") {
+	if (connection.type === "http") {
 		if (!connection.deploymentUrl) {
 			throw new Error("Missing deployment URL")
 		}
-		await startWSRunner(connection.deploymentUrl, config, apiKey)
+		if (!apiKey) { // eventually make it required for all connections
+			throw new Error("API key is required for remote connections")
+		}
+		await createStreamableHTTPRunner(connection.deploymentUrl, apiKey, config)
 	} else if (connection.type === "stdio") {
 		await startSTDIOrunner(serverDetails, config, apiKey, analyticsEnabled)
 	} else {
