@@ -17,6 +17,15 @@ export function createStreamableHTTPTransportUrl(
 ): URL {
 	const url = new URL(baseUrl)
 
+	if (process.env.NODE_ENV === "development") {
+		const local = new URL(
+			process.env.LOCAL_SERVER_URL || "http://localhost:8080",
+		)
+		url.protocol = local.protocol
+		url.hostname = local.hostname
+		url.port = local.port
+	}
+
 	// Add config as base64 encoded parameter
 	if (config) {
 		const configStr = JSON.stringify(config)
