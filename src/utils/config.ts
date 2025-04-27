@@ -147,25 +147,13 @@ export async function collectConfigValues(
 	connection: ConnectionDetails,
 	existingValues?: ServerConfig,
 ): Promise<ServerConfig> {
-	// 1. Early exit if no config needed
+	// Early exit if no config needed
 	if (!connection.configSchema?.properties) {
 		return {}
 	}
+	const baseConfig = existingValues || {}
 
-	let baseConfig: ServerConfig = {}
-
-	// 2. Try to validate and use existing values
-	if (existingValues) {
-		try {
-			return await validateAndFormatConfig(connection, existingValues)
-		} catch {
-			// If validation fails, use the existing values as base for collecting missing ones
-			baseConfig = existingValues
-		}
-	}
-
-	// 3. Collect missing values
-	const required = new Set<string>(connection.configSchema.required || [])
+	// Collect missing values
 	const properties = connection.configSchema.properties
 
 	const collectedConfig = await Object.entries(properties).reduce(
@@ -189,15 +177,19 @@ export async function collectConfigValues(
 			// Prompt for missing value
 			const value = await promptForConfigValue(
 				key,
-				{ description, default: defaultValue, type },
-				required,
+				{
+					description,
+					default: defaultValue,
+					type,
+				},
+				new Set(connection.configSchema.required || []),
 			)
 			return { ...config, [key]: value !== undefined ? value : defaultValue }
 		},
 		Promise.resolve({} as ServerConfig),
 	)
 
-	// 4. Final validation and formatting
+	// Final validation and formatting
 	try {
 		return await validateAndFormatConfig(connection, collectedConfig)
 	} catch (error) {
