@@ -30,6 +30,7 @@ import {
 import { checkAnalyticsConsent } from "../utils/analytics"
 import { promptForRestart } from "../utils/client"
 import { isRemote } from "../utils/runtime"
+import type { ServerConfig } from "../types/registry"
 
 /**
  * Installs and configures a Smithery server for a specified client.
@@ -38,15 +39,17 @@ import { isRemote } from "../utils/runtime"
  * @param {string} qualifiedName - The fully qualified name of the server package to install
  * @param {ValidClient} client - The client to install the server for
  * @param {Record<string, unknown>} [configValues] - Optional configuration values for the server
- * @param {string} [apiKey] - Optional API key to fetch saved config
+ * @param {string} [apiKey] - Optional API key (during installation, local servers don't need key; remote servers throw error)
+ * @param {string} [profile] - Optional profile name to use
  * @returns {Promise<void>} A promise that resolves when installation is complete
  * @throws Will throw an error if installation fails
  */
 export async function installServer(
 	qualifiedName: string,
 	client: ValidClient,
-	configValues?: Record<string, unknown>,
-	apiKey?: string,
+	configValues: ServerConfig,
+	apiKey: string | undefined,
+	profile: string | undefined,
 ): Promise<void> {
 	verbose(`Starting installation of ${qualifiedName} for client ${client}`)
 
@@ -96,13 +99,9 @@ export async function installServer(
 		}
 		checkAndNotifyRemoteServer(server)
 
-		// If api key provided, don't prompt for additional config values
 		const collectedConfigValues = apiKey
-			? configValues || {} // if api key provided, use given config if any
-			: await collectConfigValues(connection, configValues || {}) // if no api key (local servers), prompt for additional values if needed
-
-		// If config values given, always use them
-		const configFlagNeeded = !!configValues
+			? configValues || {} // If api key provided, don't prompt for additional config values
+			: await collectConfigValues(connection, configValues || {}) // if no api key (allowed for local servers), prompt for additional values if needed
 
 		verbose(`Config values: ${JSON.stringify(collectedConfigValues, null, 2)}`)
 
@@ -111,7 +110,7 @@ export async function installServer(
 			qualifiedName,
 			collectedConfigValues,
 			apiKey,
-			configFlagNeeded,
+			profile,
 		)
 		verbose(`Formatted server config: ${JSON.stringify(serverConfig, null, 2)}`)
 

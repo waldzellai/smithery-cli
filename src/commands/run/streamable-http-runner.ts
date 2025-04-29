@@ -11,19 +11,18 @@ import {
 	createIdleTimeoutManager,
 	createHeartbeatManager,
 } from "./runner-utils.js"
-import {
-	createStreamableHTTPTransportUrl,
-	type Config,
-} from "../../utils/url-utils.js"
+import { createStreamableHTTPTransportUrl } from "../../utils/url-utils.js"
+import type { ServerConfig } from "../../types/registry"
 
 type Cleanup = () => Promise<void>
 
 const createTransport = (
 	baseUrl: string,
 	apiKey: string,
-	config: Config,
+	config: ServerConfig,
+	profile: string | undefined,
 ): StreamableHTTPClientTransport => {
-	const url = createStreamableHTTPTransportUrl(baseUrl, apiKey, config)
+	const url = createStreamableHTTPTransportUrl(baseUrl, apiKey, config, profile)
 	logWithTimestamp(
 		`[Runner] Connecting to Streamable HTTP endpoint: ${baseUrl}`,
 	)
@@ -33,7 +32,8 @@ const createTransport = (
 export const createStreamableHTTPRunner = async (
 	baseUrl: string,
 	apiKey: string,
-	config: Config,
+	config: ServerConfig,
+	profile: string | undefined,
 ): Promise<Cleanup> => {
 	let retryCount = 0
 	let stdinBuffer = ""
@@ -41,7 +41,7 @@ export const createStreamableHTTPRunner = async (
 	let isShuttingDown = false
 	let isClientInitiatedClose = false
 
-	let transport = createTransport(baseUrl, apiKey, config)
+	let transport = createTransport(baseUrl, apiKey, config, profile)
 
 	const handleError = (error: Error, context: string) => {
 		logWithTimestamp(`${context}: ${error.message}`)
@@ -99,7 +99,7 @@ export const createStreamableHTTPRunner = async (
 				await new Promise((resolve) => setTimeout(resolve, delay))
 
 				// Create new transport
-				transport = createTransport(baseUrl, apiKey, config)
+				transport = createTransport(baseUrl, apiKey, config, profile)
 				logWithTimestamp(
 					"[Runner] Created new transport instance after disconnect",
 				)
