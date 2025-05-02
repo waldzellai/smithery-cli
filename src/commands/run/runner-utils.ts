@@ -2,7 +2,7 @@ import type { JSONRPCError } from "@modelcontextprotocol/sdk/types.js"
 import { ErrorCode } from "@modelcontextprotocol/sdk/types.js"
 import type { JSONRPCMessage } from "@modelcontextprotocol/sdk/types.js"
 
-export const IDLE_TIMEOUT = 10 * 30 * 1000 // 10 minutes
+export const IDLE_TIMEOUT = 10 * 60 * 1000 // 10 minutes
 export const MAX_RETRIES = 3
 export const RETRY_DELAY = 1000
 export const HEARTBEAT_INTERVAL = 30000 // 30 seconds
