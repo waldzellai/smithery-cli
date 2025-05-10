@@ -1,13 +1,13 @@
 import fetch from "cross-fetch" /* some runtimes use node <18 causing fetch not defined issue */
 import { config as dotenvConfig } from "dotenv"
+import { verbose } from "./logger"
 import {
+	type RegistryServer,
+	type ServerConfig,
 	type StdioConnection,
 	StdioConnectionSchema,
-	type ServerConfig,
-	type RegistryServer,
+	type StreamableHTTPConnection,
 } from "./types/registry"
-import type { WSConnection } from "./types/registry"
-import { verbose } from "./logger"
 
 dotenvConfig()
 
@@ -131,7 +131,7 @@ export const fetchConnection = async (
 		verbose("Successfully received connection data from registry")
 		const data = (await response.json()) as {
 			success: boolean
-			result?: StdioConnection | WSConnection
+			result?: StdioConnection | StreamableHTTPConnection
 		}
 		verbose(`Connection response received (success: ${data.success})`)
 

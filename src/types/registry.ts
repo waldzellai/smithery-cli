@@ -33,12 +33,6 @@ export const ConnectionDetailsSchema = z.union([
 		stdioFunction: z.string().optional(),
 	}),
 	z.object({
-		type: z.literal("ws"),
-		deploymentUrl: z.string().url(),
-		configSchema: JSONSchemaSchema.optional(),
-		exampleConfig: z.record(z.any()).optional(),
-	}),
-	z.object({
 		type: z.literal("http"),
 		deploymentUrl: z.string().url(),
 		configSchema: JSONSchemaSchema.optional(),
@@ -75,27 +69,18 @@ export const StdioConnectionSchema = z.object({
 		.describe("The environment to use when spawning the process."),
 })
 
-// websocket connection
-export const WSConnectionSchema = z.object({
-	deploymentUrl: z.string().describe("The URL of the WebSocket server."),
-})
-
 // streamable http connection
 export const StreamableHTTPConnectionSchema = z.object({
 	deploymentUrl: z.string().describe("The URL of the Streamable HTTP server."),
 })
 
 export type StdioConnection = z.infer<typeof StdioConnectionSchema>
-export type WSConnection = z.infer<typeof WSConnectionSchema>
 export type StreamableHTTPConnection = z.infer<
 	typeof StreamableHTTPConnectionSchema
 >
 
 // Update ConfiguredServer to handle all types
-export type ConfiguredServer =
-	| StdioConnection
-	| WSConnection
-	| StreamableHTTPConnection
+export type ConfiguredServer = StdioConnection | StreamableHTTPConnection
 
 // Server Configuration key value pairs
 export interface ServerConfig {
@@ -109,13 +94,9 @@ export const ConnectionTypeSchema = z.union([
 		...StdioConnectionSchema.shape,
 	}),
 	z.object({
-		type: z.literal("ws"),
-		...WSConnectionSchema.shape,
-	}),
-	z.object({
 		type: z.literal("http"),
 		...StreamableHTTPConnectionSchema.shape,
 	}),
 ])
 
-export type ConnectionType = "stdio" | "ws" | "http"
+export type ConnectionType = "stdio" | "http"
