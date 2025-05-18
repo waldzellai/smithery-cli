@@ -15,7 +15,7 @@ import ora from "ora"
 import { readConfig, writeConfig } from "../client-config"
 import type { ValidClient } from "../constants"
 import { verbose } from "../logger"
-import { resolvePackage } from "../registry.js"
+import { resolveServer, ResolveServerSource } from "../registry"
 import {
 	ensureUVInstalled,
 	ensureBunInstalled,
@@ -40,7 +40,7 @@ import type { ServerConfig } from "../types/registry"
  * @param {string} qualifiedName - The fully qualified name of the server package to install
  * @param {ValidClient} client - The client to install the server for
  * @param {Record<string, unknown>} [configValues] - Optional configuration values for the server
- * @param {string} [apiKey] - Optional API key (during installation, local servers don't need key; remote servers throw error)
+ * @param {string} [apiKey] - Optional API key (during installation, local servers don't need key; remote servers prompt for key)
  * @param {string} [profile] - Optional profile name to use
  * @returns {Promise<void>} A promise that resolves when installation is complete
  * @throws Will throw an error if installation fails
@@ -71,8 +71,12 @@ export async function installServer(
 
 	const spinner = ora(`Resolving ${qualifiedName}...`).start()
 	try {
-		verbose("Awaiting package resolution...")
-		const server = await resolvePackage(qualifiedName)
+		verbose("Awaiting server resolution...")
+		const server = await resolveServer(
+			qualifiedName,
+			apiKey,
+			ResolveServerSource.Install,
+		)
 		verbose(`Package resolved successfully: ${server.qualifiedName}`)
 		spinner.succeed(`Successfully resolved ${qualifiedName}`)
 
@@ -126,6 +130,7 @@ export async function installServer(
 		verbose("Prompting for client restart...")
 		await promptForRestart(client)
 		verbose("Installation process completed")
+		process.exit(0)
 	} catch (error) {
 		spinner.fail(`Failed to install ${qualifiedName}`)
 		verbose(

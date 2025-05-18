@@ -2,12 +2,21 @@ import fetch from "cross-fetch" /* some runtimes use node <18 causing fetch not 
 import { config as dotenvConfig } from "dotenv"
 import { verbose } from "./logger"
 import {
-	type RegistryServer,
 	type ServerConfig,
 	type StdioConnection,
 	StdioConnectionSchema,
 	type StreamableHTTPConnection,
 } from "./types/registry"
+import { SmitheryRegistry } from "@smithery/registry"
+import type { ServerDetailResponse } from "@smithery/registry/models/components"
+import { ANALYTICS_ENDPOINT } from "./constants"
+import { getSessionId } from "./utils/analytics"
+import { getUserId } from "./smithery-config"
+import {
+	SDKValidationError,
+	ServerError,
+	UnauthorizedError,
+} from "@smithery/registry/models/errors"
 
 dotenvConfig()
 
@@ -28,71 +37,104 @@ const getEndpoint = (): string => {
 
 /**
  * Get server details from registry
- * @param packageName The name of the package to resolve
+ * @param qualifiedName The unique name of the server to resolve
+ * @param apiKey Optional API key for authentication
+ * @param source Optional source of the call (install, run, inspect)
  * @returns Details about the server, including available connection options
  */
-export const resolvePackage = async (
-	packageName: string,
-): Promise<RegistryServer> => {
-	const endpoint = getEndpoint()
-	verbose(`Resolving package ${packageName} from registry at ${endpoint}`)
+export enum ResolveServerSource {
+	Install = "install",
+	Run = "run",
+	Inspect = "inspect",
+}
+
+export const resolveServer = async (
+	serverQualifiedName: string,
+	apiKey?: string,
+	source?: ResolveServerSource,
+): Promise<ServerDetailResponse> => {
+	// Fire analytics event if apiKey is missing
+	if (ANALYTICS_ENDPOINT) {
+		;(async () => {
+			try {
+				const sessionId = getSessionId()
+				const userId = await getUserId()
+				await fetch(ANALYTICS_ENDPOINT, {
+					method: "POST",
+					headers: { "Content-Type": "application/json" },
+					body: JSON.stringify({
+						eventName: "resolve_server",
+						payload: {
+							serverQualifiedName,
+							source,
+							hasApiKey: !!apiKey,
+						},
+						$session_id: sessionId,
+						userId,
+					}),
+				})
+			} catch (err) {
+				// Ignore analytics errors
+			}
+		})()
+	}
+
+	const options: Record<string, any> = {
+		bearerAuth: apiKey ?? process.env.SMITHERY_BEARER_AUTH ?? "",
+	}
+	if (
+		process.env.NODE_ENV === "development" &&
+		process.env.LOCAL_REGISTRY_ENDPOINT
+	) {
+		options.serverURL = process.env.LOCAL_REGISTRY_ENDPOINT
+	}
+
+	const smitheryRegistry = new SmitheryRegistry(options)
+	verbose(
+		`Resolving package ${serverQualifiedName} using Smithery SDK at ${options.serverURL || "<default>"}`,
+	)
 
 	try {
-		verbose(`Making GET request to ${endpoint}/servers/${packageName}`)
-		const response = await fetch(`${endpoint}/servers/${packageName}`, {
-			method: "GET",
-			headers: {
-				"Content-Type": "application/json",
-			},
+		const result = await smitheryRegistry.servers.get({
+			qualifiedName: serverQualifiedName,
 		})
-		verbose(`Response status: ${response.status}`)
-
-		if (!response.ok) {
-			const errorData = (await response.json().catch(() => null)) as {
-				error?: string
-			}
-			const errorMessage = errorData?.error || (await response.text())
-			verbose(`Error response: ${errorMessage}`)
-
-			if (response.status === 404) {
-				throw new Error(`Server "${packageName}" not found`)
-			}
-
-			throw new Error(
-				`Package resolution failed with status ${response.status}: ${errorMessage}`,
-			)
-		}
-
-		verbose("Successfully received server data from registry")
-		const data = (await response.json()) as RegistryServer
-		verbose(
-			`Server ${packageName} resolved with ${data.connections.length} connection options`,
-		)
-		return data
+		verbose("Successfully received server data from Smithery SDK")
+		return result
 	} catch (error) {
-		verbose(
-			`Package resolution error: ${error instanceof Error ? error.message : String(error)}`,
-		)
-		if (error instanceof Error) {
-			throw error // Pass through our custom errors without wrapping
+		if (error instanceof SDKValidationError) {
+			verbose(`SDK validation error: ${error.pretty()}`)
+			verbose(JSON.stringify(error.rawValue))
+			throw error
+		} else if (error instanceof UnauthorizedError) {
+			verbose(`Unauthorized: ${error.message}`)
+			throw error
+		} else if (error instanceof ServerError) {
+			verbose(`Server error: ${error.message}`)
+			throw error
+		} else if (error instanceof Error) {
+			verbose(`Unknown error: ${error.message}`)
+			throw error
+		} else {
+			throw new Error(`Failed to resolve package: ${error}`)
 		}
-		throw new Error(`Failed to resolve package: ${error}`)
 	}
 }
 
 /**
  * Fetches a connection for a specific package from the registry
- * @param packageName The name of the package to connect to
+ * @param serverQualifiedName The name of the package to connect to
  * @param config Configuration options for the server connection
  * @returns A validated StdioConnection object
  */
 export const fetchConnection = async (
-	packageName: string,
+	serverQualifiedName: string,
 	config: ServerConfig,
 	apiKey: string | undefined,
 ): Promise<StdioConnection> => {
 	const endpoint = getEndpoint()
-	verbose(`Fetching connection for ${packageName} from registry at ${endpoint}`)
+	verbose(
+		`Fetching connection for ${serverQualifiedName} from registry at ${endpoint}`,
+	)
 	verbose(
 		`Connection config provided (keys: ${Object.keys(config).join(", ")})`,
 	)
@@ -102,9 +144,9 @@ export const fetchConnection = async (
 			connectionType: "stdio",
 			config,
 		}
-		verbose(`Sending connection request for ${packageName}`)
+		verbose(`Sending connection request for ${serverQualifiedName}`)
 
-		verbose(`Making POST request to ${endpoint}/servers/${packageName}`)
+		verbose(`Making POST request to ${endpoint}/servers/${serverQualifiedName}`)
 		const headers: Record<string, string> = {
 			"Content-Type": "application/json",
 		}
@@ -113,7 +155,7 @@ export const fetchConnection = async (
 			headers.Authorization = `Bearer ${apiKey}`
 		}
 
-		const response = await fetch(`${endpoint}/servers/${packageName}`, {
+		const response = await fetch(`${endpoint}/servers/${serverQualifiedName}`, {
 			method: "POST",
 			headers,
 			body: JSON.stringify(requestBody),
