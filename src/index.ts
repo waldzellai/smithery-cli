@@ -2,6 +2,7 @@
 
 import chalk from "chalk"
 import { Command } from "commander"
+import { dev } from "./commands/dev"
 import { inspectServer } from "./commands/inspect"
 import { installServer } from "./commands/install"
 import { list } from "./commands/list"
@@ -11,7 +12,9 @@ import { uninstallServer } from "./commands/uninstall"
 import { type ValidClient, VALID_CLIENTS } from "./constants"
 import { setVerbose } from "./logger"
 import type { ServerConfig } from "./types/registry"
-import { ensureApiKey } from "./utils/runtime"
+import { ensureApiKey, promptForApiKey } from "./utils/runtime"
+import { build } from "./commands/build"
+import { setApiKey } from "./smithery-config"
 
 const program = new Command()
 
@@ -149,6 +152,53 @@ program
 		await run(server, config, await ensureApiKey(options.key), options.profile)
 	})
 
+// Dev command
+program
+	.command("dev [entryFile]")
+	.description("Start development server with hot-reload and tunnel")
+	.option("--port <port>", "Port to run the server on (default: 8181)")
+	.option("--key <apikey>", "Provide an API key")
+	.option("--no-open", "Don't automatically open the playground")
+	.action(async (entryFile, options) => {
+		await dev({
+			entryFile,
+			port: options.port,
+			key: options.key,
+			open: options.open,
+		})
+	})
+
+// Build command
+program
+	.command("build [entryFile]")
+	.description("Build MCP server for production")
+	.option(
+		"-o, --out <outfile>",
+		"Output file path (default: .smithery/index.cjs)",
+	)
+	.option(
+		"--transport <type>",
+		"Transport type: shttp or stdio (default: shttp)",
+	)
+	.action(async (entryFile, options) => {
+		// Validate transport option
+		const transport = options.transport || "shttp"
+		if (!["shttp", "stdio"].includes(transport)) {
+			console.error(
+				chalk.red(
+					`Invalid transport type "${transport}". Valid options are: shttp, stdio`,
+				),
+			)
+			process.exit(1)
+		}
+
+		await build({
+			entryFile,
+			outFile: options.out,
+			transport: transport as "shttp" | "stdio",
+		})
+	})
+
 // Playground command
 program
 	.command("playground")
@@ -209,6 +259,37 @@ program
 			console.error(
 				chalk.red(`Invalid list type: ${type}. Use 'clients' or 'servers'`),
 			)
+			process.exit(1)
+		}
+	})
+
+// Login command
+program
+	.command("login")
+	.description("Login with an API key")
+	.action(async () => {
+		console.log(chalk.cyan("Login to Smithery"))
+		console.log(
+			chalk.gray("Get your API key from: https://smithery.ai/account/api-keys"),
+		)
+		console.log()
+
+		try {
+			const apiKey = await promptForApiKey()
+			const result = await setApiKey(apiKey)
+
+			if (result.success) {
+				console.log(chalk.green("✓ API key saved successfully"))
+				console.log(chalk.gray("You can now use Smithery CLI commands"))
+			} else {
+				console.error(chalk.red("✗ Failed to save API key"))
+				console.error(chalk.gray("You may need to enter it again next time"))
+			}
+		} catch (error) {
+			console.error(chalk.red("✗ Login failed"))
+			const errorMessage =
+				error instanceof Error ? error.message : String(error)
+			console.error(chalk.gray(errorMessage))
 			process.exit(1)
 		}
 	})
