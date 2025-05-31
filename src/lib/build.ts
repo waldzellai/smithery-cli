@@ -91,35 +91,22 @@ export async function buildMcpServer(
 				namespace: "bootstrap",
 			}))
 
-			build.onResolve({ filter: /^virtual:user-module$/ }, () => ({
-				path: "virtual:user-module",
-				namespace: "user-module",
-			}))
-
 			build.onLoad({ filter: /.*/, namespace: "bootstrap" }, () => {
-				return {
-					contents:
-						transport === "stdio"
-							? __SMITHERY_STDIO_BOOTSTRAP__
-							: __SMITHERY_SHTTP_BOOTSTRAP__,
-					loader: "js",
-				}
-			})
+				// Get the bootstrap code
+				const bootstrapCode =
+					transport === "stdio"
+						? __SMITHERY_STDIO_BOOTSTRAP__
+						: __SMITHERY_SHTTP_BOOTSTRAP__
 
-			build.onLoad({ filter: /.*/, namespace: "user-module" }, async () => {
-				// First, compile the user's TypeScript to JavaScript
-				const userBuildResult = await esbuild.build({
-					...commonOptions,
-					entryPoints: [entryFile],
-					write: false, // Don't write to disk, get result as string
-					sourcemap: false,
-				})
+				const modifiedBootstrap = bootstrapCode.replace(
+					'require("virtual:user-module")',
+					`require(${JSON.stringify(entryFile)})`,
+				)
 
-				// Get the compiled user code
-				const userCompiledCode = userBuildResult.outputFiles[0].text
 				return {
-					contents: userCompiledCode,
+					contents: modifiedBootstrap,
 					loader: "js",
+					resolveDir: dirname(entryFile),
 				}
 			})
 		},

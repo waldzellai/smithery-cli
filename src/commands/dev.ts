@@ -25,11 +25,13 @@ export async function dev(options: DevOptions = {}): Promise<void> {
 		let childProcess: ChildProcess | undefined
 		let tunnelListener: { close: () => Promise<void> } | undefined
 		let isFirstBuild = true
+		let isRebuilding = false
 
 		// Function to start the server process
 		const startServer = async () => {
 			// Kill existing process
 			if (childProcess && !childProcess.killed) {
+				isRebuilding = true
 				childProcess.kill("SIGTERM")
 				await new Promise((resolve) => setTimeout(resolve, 100))
 			}
@@ -77,7 +79,13 @@ export async function dev(options: DevOptions = {}): Promise<void> {
 			})
 
 			childProcess.on("exit", (code) => {
-				if (code !== 0) {
+				// Ignore exits during rebuilds - this is expected behavior
+				if (isRebuilding) {
+					isRebuilding = false
+					return
+				}
+				
+				if (code !== 0 && code !== null) {
 					console.log(chalk.yellow(`⚠️  Process exited with code ${code}`))
 					cleanup()
 				}
