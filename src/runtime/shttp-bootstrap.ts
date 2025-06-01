@@ -2,10 +2,6 @@ import {
 	createStatefulServer,
 	type CreateServerFn as CreateStatefulServerFn,
 } from "@smithery/sdk/server/stateful.js"
-import {
-	createStatelessServer,
-	type CreateServerFn as CreateStatelessServerFn,
-} from "@smithery/sdk/server/stateless.js"
 import cors from "cors"
 import express from "express"
 import type { z } from "zod"
@@ -16,10 +12,9 @@ import * as _entry from "virtual:user-module"
 
 // Type declaration for the user module
 interface SmitheryModule {
-	// Named exports
-	createStatefulServer?: CreateStatefulServerFn
-	createStatelessServer?: CreateStatelessServerFn
 	configSchema?: z.ZodSchema
+	// Default export (treated as stateful server)
+	default?: CreateStatefulServerFn
 }
 
 const entry: SmitheryModule = _entry
@@ -44,34 +39,17 @@ async function startMcpServer() {
 			)
 		}
 
-		if (
-			entry.createStatefulServer &&
-			typeof entry.createStatefulServer === "function"
-		) {
-			// Stateful server
-			console.log(`[smithery] Setting up stateful server.`)
+		if (entry.default && typeof entry.default === "function") {
+			console.log(`[smithery] Setting up server.`)
 
-			server = createStatefulServer(entry.createStatefulServer, {
-				schema: entry.configSchema,
-				app,
-			})
-		} else if (
-			entry.createStatelessServer &&
-			typeof entry.createStatelessServer === "function"
-		) {
-			// Stateless server
-			console.log(`[smithery] Setting up stateless server`)
-
-			server = createStatelessServer(entry.createStatelessServer, {
+			server = createStatefulServer(entry.default, {
 				schema: entry.configSchema,
 				app,
 			})
 		} else {
 			throw new Error(
-				"No valid server export found. Please export either:\n" +
-					"- export function createStatefulServer({ sessionId, config }) { ... }\n" +
-					"- export function createStatelessServer({ config }) { ... }\n" +
-					"- export default function({ config }) { ... }",
+				"No valid server export found. Please export:\n" +
+					"- export default function({ sessionId, config }) { ... }",
 			)
 		}
 

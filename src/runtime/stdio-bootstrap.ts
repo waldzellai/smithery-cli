@@ -1,6 +1,5 @@
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import type { CreateServerFn as CreateStatefulServerFn } from "@smithery/sdk/server/stateful.js"
-import type { CreateServerFn as CreateStatelessServerFn } from "@smithery/sdk/server/stateless.js"
 import _ from "lodash"
 import type { z } from "zod"
 import { zodToJsonSchema } from "zod-to-json-schema"
@@ -11,10 +10,9 @@ import * as _entry from "virtual:user-module"
 
 // Type declaration for the user module
 interface SmitheryModule {
-	// Named exports
-	createStatefulServer?: CreateStatefulServerFn
-	createStatelessServer?: CreateStatelessServerFn
 	configSchema?: z.ZodSchema
+	// Default export (treated as stateful server)
+	default?: CreateStatefulServerFn
 }
 
 const entry: SmitheryModule = _entry
@@ -103,31 +101,15 @@ async function startMcpServer() {
 		}
 
 		let mcpServer: any
-
-		if (
-			entry.createStatefulServer &&
-			typeof entry.createStatefulServer === "function"
-		) {
-			// Stateful server - generate a session ID for stdio
+		if (entry.default && typeof entry.default === "function") {
 			const sessionId = `stdio-${Date.now()}-${Math.random().toString(36).substring(2)}`
-			console.error(
-				`[smithery] Creating stateful server with session: ${sessionId}`,
-			)
+			console.error(`[smithery] Creating server.`)
 
-			mcpServer = entry.createStatefulServer({ sessionId, config })
-		} else if (
-			entry.createStatelessServer &&
-			typeof entry.createStatelessServer === "function"
-		) {
-			// Stateless server
-			console.error(`[smithery] Creating stateless server`)
-
-			mcpServer = entry.createStatelessServer({ config })
+			mcpServer = entry.default({ sessionId, config })
 		} else {
 			throw new Error(
-				"No valid server export found. Please export either:\n" +
-					"- export function createStatefulServer({ sessionId, config }) { ... }\n" +
-					"- export function createStatelessServer({ config }) { ... }\n",
+				"No valid server export found. Please export:\n" +
+					"- export default function({ sessionId, config }) { ... }",
 			)
 		}
 

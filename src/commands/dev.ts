@@ -84,7 +84,7 @@ export async function dev(options: DevOptions = {}): Promise<void> {
 					isRebuilding = false
 					return
 				}
-				
+
 				if (code !== 0 && code !== null) {
 					console.log(chalk.yellow(`⚠️  Process exited with code ${code}`))
 					cleanup()
