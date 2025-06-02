@@ -5,12 +5,14 @@ import { setupTunnelAndPlayground } from "../lib/dev-lifecycle"
 import { ensureApiKey } from "../utils/runtime"
 import { buildMcpServer } from "../lib/build"
 import { existsSync } from "node:fs"
+import { debug } from "../logger"
 
 interface DevOptions {
 	entryFile?: string
 	port?: string
 	key?: string
 	open?: boolean
+	initialMessage?: string
 }
 
 export async function dev(options: DevOptions = {}): Promise<void> {
@@ -94,7 +96,12 @@ export async function dev(options: DevOptions = {}): Promise<void> {
 			// Start tunnel and open playground on first successful start
 			if (isFirstBuild) {
 				console.log(chalk.green(`✅ Server starting on port ${finalPort}`))
-				setupTunnelAndPlayground(finalPort, apiKey, options.open !== false)
+				setupTunnelAndPlayground(
+					finalPort,
+					apiKey,
+					options.open !== false,
+					options.initialMessage,
+				)
 					.then(({ listener }) => {
 						tunnelListener = listener
 						isFirstBuild = false
@@ -128,15 +135,26 @@ export async function dev(options: DevOptions = {}): Promise<void> {
 			if (tunnelListener) {
 				try {
 					await tunnelListener.close()
-					console.log(chalk.green("Tunnel closed"))
+					debug(chalk.green("Tunnel closed"))
 				} catch (error) {
-					console.log(chalk.yellow("Tunnel already closed"))
+					debug(chalk.yellow("Tunnel already closed"))
 				}
 			}
 
 			// Kill child process
 			if (childProcess && !childProcess.killed) {
 				console.log(chalk.yellow("Stopping MCP server..."))
+				console.log(
+					`\n\n${chalk.rgb(
+						234,
+						88,
+						12,
+					)(
+						"Thanks for using Smithery!",
+					)}\n🚀 One-click cloud deploy: ${chalk.blue.underline(
+						"https://smithery.ai/new",
+					)}\n\n`,
+				)
 				childProcess.kill("SIGTERM")
 
 				// Force kill after 5 seconds

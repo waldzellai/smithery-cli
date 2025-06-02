@@ -10,7 +10,7 @@ import { playground } from "./commands/playground"
 import { run } from "./commands/run/index"
 import { uninstallServer } from "./commands/uninstall"
 import { type ValidClient, VALID_CLIENTS } from "./constants"
-import { setVerbose } from "./logger"
+import { setVerbose, setDebug } from "./logger"
 import type { ServerConfig } from "./types/registry"
 import { ensureApiKey, promptForApiKey } from "./utils/runtime"
 import { build } from "./commands/build"
@@ -22,13 +22,16 @@ const program = new Command()
 program
 	.name("smithery")
 	.description("Smithery CLI - Manage and run MCP servers")
-	.version("1.0.0")
 	.option("--verbose", "Show detailed logs")
+	.option("--debug", "Show debug logs")
 	.hook("preAction", (thisCommand, actionCommand) => {
 		// Set verbose mode if flag is present
 		const opts = thisCommand.opts()
 		if (opts.verbose) {
 			setVerbose(true)
+		}
+		if (opts.debug) {
+			setDebug(true)
 		}
 	})
 
@@ -51,7 +54,9 @@ program
 		if (!VALID_CLIENTS.includes(options.client as ValidClient)) {
 			console.error(
 				chalk.yellow(
-					`Invalid client "${options.client}". Valid options are: ${VALID_CLIENTS.join(", ")}`,
+					`Invalid client "${
+						options.client
+					}". Valid options are: ${VALID_CLIENTS.join(", ")}`,
 				),
 			)
 			process.exit(1)
@@ -101,7 +106,9 @@ program
 		if (!VALID_CLIENTS.includes(options.client as ValidClient)) {
 			console.error(
 				chalk.yellow(
-					`Invalid client "${options.client}". Valid options are: ${VALID_CLIENTS.join(", ")}`,
+					`Invalid client "${
+						options.client
+					}". Valid options are: ${VALID_CLIENTS.join(", ")}`,
 				),
 			)
 			process.exit(1)
@@ -159,12 +166,14 @@ program
 	.option("--port <port>", "Port to run the server on (default: 8181)")
 	.option("--key <apikey>", "Provide an API key")
 	.option("--no-open", "Don't automatically open the playground")
+	.option("--prompt <prompt>", "Initial message to start the playground with")
 	.action(async (entryFile, options) => {
 		await dev({
 			entryFile,
 			port: options.port,
 			key: options.key,
 			open: options.open,
+			initialMessage: options.prompt,
 		})
 	})
 
@@ -239,7 +248,9 @@ program
 			if (!options.client) {
 				console.error(
 					chalk.yellow(
-						`Please specify a client using --client. Valid options are: ${VALID_CLIENTS.join(", ")}`,
+						`Please specify a client using --client. Valid options are: ${VALID_CLIENTS.join(
+							", ",
+						)}`,
 					),
 				)
 				process.exit(1)
@@ -248,7 +259,9 @@ program
 			if (!VALID_CLIENTS.includes(options.client as ValidClient)) {
 				console.error(
 					chalk.yellow(
-						`Invalid client "${options.client}". Valid options are: ${VALID_CLIENTS.join(", ")}`,
+						`Invalid client "${
+							options.client
+						}". Valid options are: ${VALID_CLIENTS.join(", ")}`,
 					),
 				)
 				process.exit(1)

@@ -6,11 +6,12 @@ export async function setupTunnelAndPlayground(
 	port: string,
 	apiKey: string,
 	autoOpen = true,
+	initialMessage = "Say hello to the world!",
 ): Promise<{ listener: any; url: string }> {
 	const { listener, url } = await startTunnel(port, apiKey)
 
 	if (autoOpen) {
-		await openPlayground(url)
+		await openPlayground(url, initialMessage)
 	}
 
 	console.log(chalk.gray("Press Ctrl+C to stop the dev server"))
