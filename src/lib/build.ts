@@ -14,6 +14,7 @@ export interface BuildOptions {
 	onRebuild?: (result: esbuild.BuildResult) => void
 	production?: boolean
 	transport?: "shttp" | "stdio"
+	configFile?: string // Path to config file
 }
 
 /**
@@ -63,6 +64,32 @@ Check that the file exists or update your package.json`,
 	}
 
 	return resolvedPath
+}
+
+/**
+ * Load custom esbuild configuration from file
+ */
+async function loadCustomConfig(configPath?: string): Promise<Partial<esbuild.BuildOptions>> {
+	const possiblePaths = configPath ? [configPath] : [
+		"smithery.config.js",
+		"smithery.config.mjs",
+		"smithery.config.cjs"
+	]
+	
+	for (const path of possiblePaths) {
+		const resolvedPath = resolve(process.cwd(), path)
+		if (existsSync(resolvedPath)) {
+			try {
+				// Use dynamic import to support both ESM and CJS
+				const config = await import(resolvedPath)
+				return config.default?.esbuild || config.esbuild || {}
+			} catch (error) {
+				console.warn(`Failed to load config from ${path}:`, error)
+			}
+		}
+	}
+	
+	return {}
 }
 
 export async function buildMcpServer(
@@ -134,6 +161,10 @@ export async function buildMcpServer(
 			),
 		},
 	}
+
+	// Load custom config
+	const customConfig = await loadCustomConfig(options.configFile)
+	buildConfig = { ...buildConfig, ...customConfig }
 
 	if (options.watch && options.onRebuild) {
 		// Set up esbuild with watch mode and rebuild plugin

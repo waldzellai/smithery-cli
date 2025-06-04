@@ -167,6 +167,10 @@ program
 	.option("--key <apikey>", "Provide an API key")
 	.option("--no-open", "Don't automatically open the playground")
 	.option("--prompt <prompt>", "Initial message to start the playground with")
+	.option(
+		"-c, --config <path>",
+		"Path to config file (default: auto-detect smithery.config.js)",
+	)
 	.action(async (entryFile, options) => {
 		await dev({
 			entryFile,
@@ -174,6 +178,7 @@ program
 			key: options.key,
 			open: options.open,
 			initialMessage: options.prompt,
+			configFile: options.config,
 		})
 	})
 
@@ -188,6 +193,10 @@ program
 	.option(
 		"--transport <type>",
 		"Transport type: shttp or stdio (default: shttp)",
+	)
+	.option(
+		"-c, --config <path>",
+		"Path to config file (default: auto-detect smithery.config.js)",
 	)
 	.action(async (entryFile, options) => {
 		// Validate transport option
@@ -205,6 +214,7 @@ program
 			entryFile,
 			outFile: options.out,
 			transport: transport as "shttp" | "stdio",
+			configFile: options.config,
 		})
 	})
 
